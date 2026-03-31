@@ -225,7 +225,13 @@ func openInTerminal(editor, filePath string) error {
 }
 
 func openInTerminalDarwin(editor, filePath string) error {
-	// Try iTerm2 first, fall back to Terminal.app
+	// Try Ghostty first (via open -na), then iTerm2/Terminal.app via AppleScript.
+	if _, err := os.Stat("/Applications/Ghostty.app"); err == nil {
+		cmd := exec.Command("open", "-na", "Ghostty.app", "--args", "-e", editor, filePath)
+		return cmd.Start()
+	}
+
+	// Fall back to AppleScript: prefer iTerm2 if running, else Terminal.app
 	script := fmt.Sprintf(`
 		tell application "System Events"
 			set iterm_running to (name of processes) contains "iTerm2"
@@ -257,6 +263,7 @@ func openInTerminalLinux(editor, filePath string) error {
 		cmd  string
 		args func(string, string) []string
 	}{
+		{"ghostty", func(e, f string) []string { return []string{"-e", e, f} }},
 		{"x-terminal-emulator", func(e, f string) []string { return []string{"-e", e, f} }},
 		{"gnome-terminal", func(e, f string) []string { return []string{"--", e, f} }},
 		{"konsole", func(e, f string) []string { return []string{"-e", e, f} }},
