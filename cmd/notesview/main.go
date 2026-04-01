@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 
 	"github.com/dreikanter/notesview/internal/server"
@@ -18,15 +19,16 @@ func main() {
 	open := flag.Bool("open", false, "open browser on start")
 	flag.BoolVar(open, "o", false, "shorthand for --open")
 	editor := flag.String("editor", "", "editor command (default: $NOTESVIEW_EDITOR, $VISUAL, $EDITOR)")
+	path := flag.String("path", "", "notes root path or file (default: $NOTESVIEW_PATH, $NOTES_PATH, .)")
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: notesview [options] [path]\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: notesview [options]\n\n")
 		fmt.Fprintf(os.Stderr, "Serve markdown files with live preview.\n\n")
-		fmt.Fprintf(os.Stderr, "Path resolution: argument > $NOTES_PATH > current directory\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fmt.Fprintf(os.Stderr, "  --port, -p int    port to listen on (default: auto)\n")
 		fmt.Fprintf(os.Stderr, "  --open, -o        open browser on start\n")
 		fmt.Fprintf(os.Stderr, "  --editor string   editor command (default: $NOTESVIEW_EDITOR, $VISUAL, $EDITOR)\n")
+		fmt.Fprintf(os.Stderr, "  --path string     notes root path or file (default: $NOTESVIEW_PATH, $NOTES_PATH, .)\n")
 	}
 	flag.Parse()
 
@@ -39,11 +41,22 @@ func main() {
 		}
 	}
 
-	root := resolveRoot(flag.Arg(0))
+	if *path == "" {
+		for _, env := range []string{"NOTESVIEW_PATH", "NOTES_PATH"} {
+			if v := os.Getenv(env); v != "" {
+				*path = v
+				break
+			}
+		}
+	}
+	if *path == "" {
+		*path = "."
+	}
+	*path = expandTilde(*path)
 
-	info, err := os.Stat(root)
-	if err != nil || !info.IsDir() {
-		fmt.Fprintf(os.Stderr, "Error: %s is not a directory\n", root)
+	root, initialFile, err := resolvePath(*path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -59,11 +72,15 @@ func main() {
 	}
 
 	addr := listener.Addr().String()
-	url := "http://" + addr
-	fmt.Printf("notesview serving %s at %s\n", root, url)
+	baseURL := "http://" + addr
+	fmt.Printf("notesview serving %s at %s\n", root, baseURL)
 
 	if *open {
-		openBrowser(url)
+		target := baseURL
+		if initialFile != "" {
+			target = baseURL + "/view/" + initialFile
+		}
+		openBrowser(target)
 	}
 
 	if err := http.Serve(listener, srv.Routes()); err != nil {
@@ -72,23 +89,25 @@ func main() {
 	}
 }
 
-func resolveRoot(arg string) string {
-	if arg != "" {
-		if arg[0] == '~' {
-			home, _ := os.UserHomeDir()
-			arg = home + arg[1:]
-		}
-		return arg
+// resolvePath returns the root directory and, if p points to a file,
+// the relative file name within that directory.
+func resolvePath(p string) (root, initialFile string, err error) {
+	info, err := os.Stat(p)
+	if err != nil {
+		return "", "", err
 	}
-	if p := os.Getenv("NOTES_PATH"); p != "" {
-		if p[0] == '~' {
-			home, _ := os.UserHomeDir()
-			p = home + p[1:]
-		}
-		return p
+	if info.IsDir() {
+		return p, "", nil
 	}
-	dir, _ := os.Getwd()
-	return dir
+	return filepath.Dir(p), filepath.Base(p), nil
+}
+
+func expandTilde(p string) string {
+	if len(p) > 0 && p[0] == '~' {
+		home, _ := os.UserHomeDir()
+		return home + p[1:]
+	}
+	return p
 }
 
 func openBrowser(url string) {

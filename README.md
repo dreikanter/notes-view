@@ -28,17 +28,21 @@ Path resolution order: CLI argument → `$NOTES_PATH` env var → current direct
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--path` | `$NOTESVIEW_PATH` → `$NOTES_PATH` → `.` | Notes root directory or file to open |
 | `--port`, `-p` | auto | Port to listen on |
 | `--open`, `-o` | false | Open browser on start |
 | `--editor` | `$NOTESVIEW_EDITOR` → `$VISUAL` → `$EDITOR` | Editor command |
 
+If `--path` points to a file, the server root is set to the file's parent directory and the file is opened directly in the browser (when `--open` is set).
+
 ### Examples
 
 ```sh
-notesview ~/notes           # serve a specific directory
-notesview -p 8080           # use a fixed port
-notesview --open            # open browser automatically
-notesview --editor=code     # use VS Code to open files
+notesview --path ~/notes           # serve a specific directory
+notesview --path ~/notes/todo.md   # open a specific file, serve its directory
+notesview -p 8080                  # use a fixed port
+notesview --open                   # open browser automatically
+notesview --editor=code            # use VS Code to open files
 ```
 
 ## Development
