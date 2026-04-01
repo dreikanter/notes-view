@@ -19,12 +19,16 @@ go install github.com/dreikanter/notesview/cmd/notesview@latest
 ## Usage
 
 ```sh
-notesview [options] [path]
+notesview <command> [flags]
 ```
 
-Path resolution order: CLI argument → `$NOTES_PATH` env var → current directory.
+### serve
 
-### Options
+Start the local preview server.
+
+```sh
+notesview serve [flags]
+```
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -38,11 +42,11 @@ If `--path` points to a file, the server root is set to the file's parent direct
 ### Examples
 
 ```sh
-notesview --path ~/notes           # serve a specific directory
-notesview --path ~/notes/todo.md   # open a specific file, serve its directory
-notesview -p 8080                  # use a fixed port
-notesview --open                   # open browser automatically
-notesview --editor=code            # use VS Code to open files
+notesview serve --path ~/notes           # serve a specific directory
+notesview serve --path ~/notes/todo.md   # open a specific file, serve its directory
+notesview serve -p 8080                  # use a fixed port
+notesview serve --open                   # open browser automatically
+notesview serve --editor=code            # use VS Code to open files
 ```
 
 ## Development

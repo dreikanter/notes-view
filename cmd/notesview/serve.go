@@ -1,0 +1,119 @@
+package main
+
+import (
+	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+
+	"github.com/dreikanter/notesview/internal/server"
+	"github.com/spf13/cobra"
+)
+
+var serveCmd = &cobra.Command{
+	Use:   "serve",
+	Short: "Serve markdown notes with live preview",
+	RunE:  runServe,
+}
+
+func init() {
+	serveCmd.Flags().IntP("port", "p", 0, "port to listen on (default: auto)")
+	serveCmd.Flags().BoolP("open", "o", false, "open browser on start")
+	serveCmd.Flags().String("editor", "", "editor command (default: $NOTESVIEW_EDITOR, $VISUAL, $EDITOR)")
+	serveCmd.Flags().String("path", "", "notes root path or file (default: $NOTESVIEW_PATH, $NOTES_PATH, .)")
+	rootCmd.AddCommand(serveCmd)
+}
+
+func runServe(cmd *cobra.Command, args []string) error {
+	port, _ := cmd.Flags().GetInt("port")
+	open, _ := cmd.Flags().GetBool("open")
+	editor, _ := cmd.Flags().GetString("editor")
+	path, _ := cmd.Flags().GetString("path")
+
+	if editor == "" {
+		for _, env := range []string{"NOTESVIEW_EDITOR", "VISUAL", "EDITOR"} {
+			if v := os.Getenv(env); v != "" {
+				editor = v
+				break
+			}
+		}
+	}
+
+	if path == "" {
+		for _, env := range []string{"NOTESVIEW_PATH", "NOTES_PATH"} {
+			if v := os.Getenv(env); v != "" {
+				path = v
+				break
+			}
+		}
+	}
+	if path == "" {
+		path = "."
+	}
+	path = expandTilde(path)
+
+	root, initialFile, err := resolvePath(path)
+	if err != nil {
+		return err
+	}
+
+	srv := server.NewServer(root, editor)
+	if err := srv.StartWatcher(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: file watcher failed to start: %v\n", err)
+	}
+
+	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		return err
+	}
+
+	baseURL := "http://" + listener.Addr().String()
+	fmt.Printf("notesview serving %s at %s\n", root, baseURL)
+
+	if open {
+		target := baseURL
+		if initialFile != "" {
+			target = baseURL + "/view/" + initialFile
+		}
+		openBrowser(target)
+	}
+
+	return http.Serve(listener, srv.Routes())
+}
+
+func resolvePath(p string) (root, initialFile string, err error) {
+	info, err := os.Stat(p)
+	if err != nil {
+		return "", "", err
+	}
+	if info.IsDir() {
+		return p, "", nil
+	}
+	return filepath.Dir(p), filepath.Base(p), nil
+}
+
+func expandTilde(p string) string {
+	if len(p) > 0 && p[0] == '~' {
+		home, _ := os.UserHomeDir()
+		return home + p[1:]
+	}
+	return p
+}
+
+func openBrowser(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		return
+	}
+	cmd.Start()
+}
