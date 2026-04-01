@@ -27,7 +27,8 @@
   #sidebar {
     @apply fixed top-12 left-0 bottom-0 w-[280px] bg-white border-r border-gray-200
            overflow-y-auto overflow-x-hidden transition-transform duration-200
-           ease-in-out z-[90] py-2;
+           z-[90] py-2;
+    transition-timing-function: ease;
   }
 
   #sidebar.hidden {
