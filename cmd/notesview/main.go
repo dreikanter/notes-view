@@ -14,19 +14,30 @@ import (
 
 func main() {
 	port := flag.Int("port", 0, "port to listen on (default: auto)")
-	flag.IntVar(port, "p", 0, "port to listen on (shorthand)")
-	open := flag.Bool("open", true, "open browser on start")
-	flag.BoolVar(open, "o", true, "open browser on start (shorthand)")
-	editor := flag.String("editor", "", "editor command (overrides $EDITOR)")
+	flag.IntVar(port, "p", 0, "shorthand for --port")
+	open := flag.Bool("open", false, "open browser on start")
+	flag.BoolVar(open, "o", false, "shorthand for --open")
+	editor := flag.String("editor", "", "editor command (default: $NOTESVIEW_EDITOR, $VISUAL, $EDITOR)")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: notesview [options] [path]\n\n")
 		fmt.Fprintf(os.Stderr, "Serve markdown files with live preview.\n\n")
 		fmt.Fprintf(os.Stderr, "Path resolution: argument > $NOTES_PATH > current directory\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
-		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "  --port, -p int    port to listen on (default: auto)\n")
+		fmt.Fprintf(os.Stderr, "  --open, -o        open browser on start\n")
+		fmt.Fprintf(os.Stderr, "  --editor string   editor command (default: $NOTESVIEW_EDITOR, $VISUAL, $EDITOR)\n")
 	}
 	flag.Parse()
+
+	if *editor == "" {
+		for _, env := range []string{"NOTESVIEW_EDITOR", "VISUAL", "EDITOR"} {
+			if v := os.Getenv(env); v != "" {
+				*editor = v
+				break
+			}
+		}
+	}
 
 	root := resolveRoot(flag.Arg(0))
 

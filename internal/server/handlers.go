@@ -182,10 +182,7 @@ func (s *Server) handleEdit(w http.ResponseWriter, r *http.Request) {
 	}
 	editor := s.editor
 	if editor == "" {
-		editor = os.Getenv("EDITOR")
-	}
-	if editor == "" {
-		http.Error(w, "$EDITOR is not set", http.StatusBadRequest)
+		http.Error(w, "no editor configured (set NOTESVIEW_EDITOR, VISUAL, or EDITOR)", http.StatusBadRequest)
 		return
 	}
 

@@ -28,17 +28,17 @@ Path resolution order: CLI argument → `$NOTES_PATH` env var → current direct
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `-port`, `-p` | auto | Port to listen on |
-| `-open`, `-o` | true | Open browser on start |
-| `-editor` | `$EDITOR` | Editor command override |
+| `--port`, `-p` | auto | Port to listen on |
+| `--open`, `-o` | false | Open browser on start |
+| `--editor` | `$NOTESVIEW_EDITOR` → `$VISUAL` → `$EDITOR` | Editor command |
 
 ### Examples
 
 ```sh
-notesview ~/notes          # serve a specific directory
-notesview -p 8080          # use a fixed port
-notesview -open=false       # don't open browser automatically
-notesview -editor=code      # use VS Code to open files
+notesview ~/notes           # serve a specific directory
+notesview -p 8080           # use a fixed port
+notesview --open            # open browser automatically
+notesview --editor=code     # use VS Code to open files
 ```
 
 ## Development
