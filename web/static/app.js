@@ -158,7 +158,7 @@
       parts.push('</div>');
     }
 
-    parts.push('<div class="markdown-body">' + html + '</div>');
+    parts.push('<div class="markdown-body prose max-w-none">' + html + '</div>');
 
     var content = document.getElementById('content');
     content.innerHTML = parts.join('');
