@@ -12,8 +12,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/alex/notesview/internal/renderer"
-	"github.com/alex/notesview/web"
+	"github.com/dreikanter/notesview/internal/renderer"
+	"github.com/dreikanter/notesview/web"
 )
 
 type ViewResponse struct {

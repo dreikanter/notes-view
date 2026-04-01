@@ -10,7 +10,7 @@ import (
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
 
-	"github.com/alex/notesview/internal/index"
+	"github.com/dreikanter/notesview/internal/index"
 )
 
 type Frontmatter struct {

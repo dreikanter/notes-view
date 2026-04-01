@@ -9,7 +9,7 @@ import (
 	"os/exec"
 	"runtime"
 
-	"github.com/alex/notesview/internal/server"
+	"github.com/dreikanter/notesview/internal/server"
 )
 
 func main() {

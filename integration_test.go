@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/alex/notesview/internal/server"
+	"github.com/dreikanter/notesview/internal/server"
 )
 
 func TestIntegrationSmoke(t *testing.T) {

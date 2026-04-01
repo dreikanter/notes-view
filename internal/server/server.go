@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/alex/notesview/internal/index"
-	"github.com/alex/notesview/internal/renderer"
-	"github.com/alex/notesview/web"
+	"github.com/dreikanter/notesview/internal/index"
+	"github.com/dreikanter/notesview/internal/renderer"
+	"github.com/dreikanter/notesview/web"
 )
 
 type Server struct {

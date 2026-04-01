@@ -56,7 +56,7 @@ notesview/
 Run:
 ```bash
 cd /Users/alex/20260331_plain-thunder
-go mod init github.com/alex/notesview
+go mod init github.com/dreikanter/notesview
 ```
 
 Expected: `go.mod` created
@@ -523,7 +523,7 @@ import (
 
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 
-	"github.com/alex/notesview/internal/index"
+	"github.com/dreikanter/notesview/internal/index"
 )
 
 // Frontmatter holds parsed YAML frontmatter fields.
@@ -656,7 +656,7 @@ go get github.com/yuin/goldmark
 go get github.com/yuin/goldmark-meta
 go get github.com/yuin/goldmark-highlighting/v2
 go get github.com/fsnotify/fsnotify
-go get github.com/alex/notesview/internal/index
+go get github.com/dreikanter/notesview/internal/index
 ```
 
 Wait — the index is a local package, no `go get` needed. Run:
@@ -696,7 +696,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alex/notesview/internal/index"
+	"github.com/dreikanter/notesview/internal/index"
 )
 
 func setupTestIndex(t *testing.T) *index.Index {
@@ -798,7 +798,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/alex/notesview/internal/index"
+	"github.com/dreikanter/notesview/internal/index"
 )
 
 // noteProtoRe matches href="note://UID" in rendered HTML
@@ -1063,9 +1063,9 @@ import (
 	"io/fs"
 	"net/http"
 
-	"github.com/alex/notesview/internal/index"
-	"github.com/alex/notesview/internal/renderer"
-	"github.com/alex/notesview/web"
+	"github.com/dreikanter/notesview/internal/index"
+	"github.com/dreikanter/notesview/internal/renderer"
+	"github.com/dreikanter/notesview/web"
 )
 
 // Server is the notesview HTTP server.
@@ -1125,7 +1125,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/alex/notesview/internal/renderer"
+	"github.com/dreikanter/notesview/internal/renderer"
 )
 
 // ViewResponse is the JSON response for the /view/ endpoint.
@@ -2273,7 +2273,7 @@ import (
 	"os/exec"
 	"runtime"
 
-	"github.com/alex/notesview/internal/server"
+	"github.com/dreikanter/notesview/internal/server"
 )
 
 func main() {
@@ -2434,7 +2434,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/alex/notesview/internal/server"
+	"github.com/dreikanter/notesview/internal/server"
 )
 
 func TestIntegrationSmoke(t *testing.T) {

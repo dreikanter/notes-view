@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alex/notesview/internal/index"
+	"github.com/dreikanter/notesview/internal/index"
 )
 
 func setupTestIndex(t *testing.T) *index.Index {

@@ -1,4 +1,4 @@
-module github.com/alex/notesview
+module github.com/dreikanter/notesview
 
 go 1.25.7
 

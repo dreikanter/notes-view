@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/alex/notesview/internal/index"
+	"github.com/dreikanter/notesview/internal/index"
 )
 
 var noteProtoRe = regexp.MustCompile(`href="note://(\d{8}_\d+)"`)
