@@ -42,16 +42,18 @@ If `--path` points to a file, the server root is set to the file's parent direct
 ### Examples
 
 ```sh
-notesview serve --path ~/notes           # serve a specific directory
-notesview serve --path ~/notes/todo.md   # open a specific file, serve its directory
-notesview serve -p 8080                  # use a fixed port
-notesview serve --open                   # open browser automatically
-notesview serve --editor=code            # use VS Code to open files
+notesview serve                            # serve current directory
+notesview serve --path ~/notes            # serve a specific directory
+notesview serve --path ~/notes/todo.md    # open a specific file, serve its directory
+notesview serve -p 8080                   # use a fixed port
+notesview serve --open                    # open browser on start
+notesview serve --editor=code             # use VS Code to open files
 ```
 
 ## Development
 
 ```sh
-go test ./...
-go build ./cmd/notesview
+make build   # build to bin/notesview
+make test    # run tests
+make lint    # run golangci-lint
 ```
