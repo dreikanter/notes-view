@@ -20,6 +20,18 @@ type BrowseEntry struct {
 	Path  string
 }
 
+// sidebarFor returns the full sidebar tree for normal page loads, or nil for
+// HTMX-boosted requests. The layout's #sidebar element carries hx-preserve
+// and is never part of the swap target (#content), so boosted nav discards
+// any sidebar HTML the server produces — walking the notes tree for those
+// requests is pure waste on repositories with many files.
+func (s *Server) sidebarFor(r *http.Request) []SidebarNode {
+	if r.Header.Get("HX-Request") != "" {
+		return nil
+	}
+	return buildSidebarTree(s.root)
+}
+
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -67,7 +79,7 @@ func (s *Server) handleView(w http.ResponseWriter, r *http.Request) {
 		layoutFields: layoutFields{
 			Title:       title,
 			Breadcrumbs: buildBreadcrumbs(reqPath, true),
-			Sidebar:     buildSidebarTree(s.root),
+			Sidebar:     s.sidebarFor(r),
 			EditPath:    reqPath,
 		},
 		FilePath:    reqPath,
@@ -130,7 +142,7 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 		layoutFields: layoutFields{
 			Title:       dirTitle(reqPath),
 			Breadcrumbs: buildBreadcrumbs(reqPath, false),
-			Sidebar:     buildSidebarTree(s.root),
+			Sidebar:     s.sidebarFor(r),
 		},
 		DirPath: reqPath,
 		Entries: entries,

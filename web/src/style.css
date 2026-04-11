@@ -118,6 +118,12 @@
   transform: rotate(90deg);
 }
 
+/* Hide the default disclosure marker across browsers: Firefox honours
+   list-style: none on <summary>, WebKit/Blink needs the pseudo. */
+.sidebar-dir summary {
+  list-style: none;
+}
+
 .sidebar-dir summary::-webkit-details-marker {
   display: none;
 }

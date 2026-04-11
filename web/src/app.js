@@ -31,10 +31,27 @@ function refreshSidebarActive() {
   });
   var path = currentFilePath();
   if (!path) return;
-  var link = sidebar.querySelector('.sidebar-link[data-file-path="' + path + '"]');
-  if (link) {
-    var item = link.closest('.sidebar-item');
-    if (item) item.classList.add('active');
+  // Comparing dataset.filePath directly avoids building a CSS selector
+  // from a path that may contain ", \, ] or other characters that break
+  // attribute selectors.
+  var link = null;
+  var links = sidebar.querySelectorAll('.sidebar-link');
+  for (var i = 0; i < links.length; i++) {
+    if (links[i].dataset.filePath === path) {
+      link = links[i];
+      break;
+    }
+  }
+  if (!link) return;
+  var item = link.closest('.sidebar-item');
+  if (item) item.classList.add('active');
+  // Open every ancestor <details> so deep-linked notes remain visible
+  // inside collapsed folders.
+  var details = link.closest('details');
+  while (details) {
+    details.open = true;
+    var parent = details.parentElement;
+    details = parent ? parent.closest('details') : null;
   }
 }
 

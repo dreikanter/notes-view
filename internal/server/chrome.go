@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -8,9 +9,10 @@ import (
 )
 
 // buildBreadcrumbs constructs the breadcrumbs trail for a given path.
-// If isFile is true, each non-terminal segment is a /browse/ link to the
-// parent directory and the final segment is the current file (no link).
-// If isFile is false, every segment links to /browse/.
+// Regardless of isFile, intermediate segments link to /browse/ and the
+// final segment is marked Current (no link): when isFile is true the
+// final segment names the current file, when isFile is false it names
+// the current directory.
 func buildBreadcrumbs(path string, isFile bool) []Crumb {
 	path = strings.Trim(path, "/")
 	if path == "" {
@@ -53,6 +55,10 @@ func readSidebarDir(root, rel string) []SidebarNode {
 	absPath := filepath.Join(root, rel)
 	dirEntries, err := os.ReadDir(absPath)
 	if err != nil {
+		// Log once and degrade gracefully: a read failure in one subtree
+		// (permissions, broken symlink, etc.) shouldn't break the whole
+		// sidebar, but it also shouldn't be completely invisible.
+		log.Printf("notesview: sidebar: read %q: %v", absPath, err)
 		return nil
 	}
 

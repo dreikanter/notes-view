@@ -3,7 +3,7 @@
   {{ range . }}
   <span class="text-gray-400 select-none">/</span>
   {{ if .Current }}
-  <span class="text-gray-900 overflow-hidden text-ellipsis">{{ .Label }}</span>
+  <span aria-current="page" class="text-gray-900 overflow-hidden text-ellipsis">{{ .Label }}</span>
   {{ else }}
   <a class="text-blue-600 no-underline hover:underline" href="{{ .Href }}">{{ .Label }}</a>
   {{ end }}

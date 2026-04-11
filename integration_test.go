@@ -21,7 +21,10 @@ func TestIntegrationSmoke(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "2026", "03", "20260331_9201_todo.md"),
 		[]byte("---\ntitle: Daily Todo\ntags: [todo]\n---\n# Daily Todo\n\n- [+] Done task\n- [ ] Pending task\n- [daily] Routine\n\nSee [readme](../../README.md) and note://20260331_9201.\n"), 0o644)
 
-	srv := server.NewServer(dir, "")
+	srv, err := server.NewServer(dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ts := httptest.NewServer(srv.Routes())
 	defer ts.Close()
 
@@ -85,7 +88,11 @@ func TestIntegrationSmoke(t *testing.T) {
 	}
 
 	// Test: 404
-	resp, _ = http.Get(ts.URL + "/view/nonexistent.md")
+	resp, err = http.Get(ts.URL + "/view/nonexistent.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("404: status = %d", resp.StatusCode)
 	}

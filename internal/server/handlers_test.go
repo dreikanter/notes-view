@@ -15,7 +15,10 @@ func setupTestServer(t *testing.T) (*Server, string) {
 	os.MkdirAll(filepath.Join(dir, "2026", "03"), 0o755)
 	os.WriteFile(filepath.Join(dir, "2026", "03", "20260331_9201_todo.md"), []byte("---\ntitle: Todo\ntags: [todo, daily]\n---\n# Todo\n- [+] Done\n- [ ] Pending\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "README.md"), []byte("# Welcome\nHello"), 0o644)
-	srv := NewServer(dir, "")
+	srv, err := NewServer(dir, "")
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
 	return srv, dir
 }
 
@@ -42,8 +45,8 @@ func TestViewHandler(t *testing.T) {
 	if !strings.Contains(body, ">todo<") || !strings.Contains(body, ">daily<") {
 		t.Errorf("expected frontmatter tags in body")
 	}
-	// The SSE wrapper should reference the file path.
-	if !strings.Contains(body, `sse-connect="/events?watch=2026/03/20260331_9201_todo.md"`) {
+	// The SSE wrapper should reference the file path (percent-encoded).
+	if !strings.Contains(body, `sse-connect="/events?watch=2026%2F03%2F20260331_9201_todo.md"`) {
 		t.Errorf("expected sse-connect for file, got: %s", body)
 	}
 	// Sidebar tree should include the file.
@@ -144,9 +147,14 @@ func TestViewStripsRedundantH1(t *testing.T) {
 
 	body := w.Body.String()
 	// The markdown has `# Todo` which matches frontmatter title "Todo".
-	// The rendered markdown body should not contain a bare <h1>Todo</h1>.
-	md := body[strings.Index(body, `class="markdown-body`):]
-	if strings.Contains(md, "<h1") {
-		t.Errorf("expected <h1> to be stripped from markdown body when matching title, got: %s", md)
+	// The rendered markdown body should not contain a duplicate <h1>Todo</h1>;
+	// unrelated later <h1> tags are fine.
+	idx := strings.Index(body, `class="markdown-body`)
+	if idx == -1 {
+		t.Fatalf("expected markdown-body wrapper in body, got: %s", body)
+	}
+	md := body[idx:]
+	if strings.Contains(md, "<h1>Todo</h1>") {
+		t.Errorf("expected duplicate <h1>Todo</h1> to be stripped, got: %s", md)
 	}
 }

@@ -2,6 +2,7 @@ package renderer
 
 import (
 	"bytes"
+	stdhtml "html"
 	"regexp"
 	"strings"
 
@@ -9,7 +10,6 @@ import (
 	meta "github.com/yuin/goldmark-meta"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
-	"github.com/yuin/goldmark/renderer/html"
 
 	"github.com/dreikanter/notesview/internal/index"
 )
@@ -35,6 +35,11 @@ type Renderer struct {
 }
 
 func NewRenderer(idx *index.Index) *Renderer {
+	// NOTE: html.WithUnsafe() is deliberately NOT set. Without it, goldmark
+	// escapes raw HTML from markdown sources (e.g. a malicious <script> block
+	// becomes text). This matters even for a local-only previewer because a
+	// note file cloned from an untrusted repo could otherwise run JS in the
+	// notesview origin and hit the /api/edit endpoint.
 	md := goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,
@@ -42,9 +47,6 @@ func NewRenderer(idx *index.Index) *Renderer {
 		),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
-		),
-		goldmark.WithRendererOptions(
-			html.WithUnsafe(),
 		),
 	)
 	return &Renderer{md: md, index: idx}
@@ -93,14 +95,16 @@ func (r *Renderer) Render(source []byte, currentDir string) (string, *Frontmatte
 
 // stripRedundantTitle removes a leading <h1> whose plain-text content equals
 // the frontmatter title, avoiding a duplicate heading when the frontmatter
-// bar already shows the title.
+// bar already shows the title. HTML entities in the heading are decoded so
+// titles like "A & B" match both `# A & B` (rendered as "A &amp; B") and the
+// plain frontmatter value.
 func stripRedundantTitle(html, title string) string {
 	m := leadingH1.FindStringSubmatchIndex(html)
 	if m == nil {
 		return html
 	}
 	innerStart, innerEnd := m[2], m[3]
-	plain := tagStripper.ReplaceAllString(html[innerStart:innerEnd], "")
+	plain := stdhtml.UnescapeString(tagStripper.ReplaceAllString(html[innerStart:innerEnd], ""))
 	if strings.TrimSpace(plain) != strings.TrimSpace(title) {
 		return html
 	}

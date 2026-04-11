@@ -1,8 +1,8 @@
 package server
 
 import (
+	"fmt"
 	"io/fs"
-	"log"
 	"net/http"
 	"strings"
 
@@ -20,12 +20,12 @@ type Server struct {
 	templates *templateSet
 }
 
-func NewServer(root, editor string) *Server {
+func NewServer(root, editor string) (*Server, error) {
 	idx := index.New(root)
 	idx.Build()
 	tpls, err := loadTemplates()
 	if err != nil {
-		log.Fatalf("notesview: %v", err)
+		return nil, fmt.Errorf("load templates: %w", err)
 	}
 	return &Server{
 		root:      root,
@@ -34,7 +34,7 @@ func NewServer(root, editor string) *Server {
 		index:     idx,
 		sseHub:    NewSSEHub(root),
 		templates: tpls,
-	}
+	}, nil
 }
 
 func (s *Server) Routes() http.Handler {
