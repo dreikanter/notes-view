@@ -14,51 +14,52 @@ import (
 	"syscall"
 )
 
-// indexState extracts the index-panel state from the request query. For
-// now only the "dir" mode is supported. Returning the normalized query
-// string (either "" or "?index=dir") keeps downstream href construction a
-// single concatenation.
+// indexState parses the panel state from the request's query string.
+// Only the "dir" mode is understood today; unknown values collapse to
+// closed. The returned explicitPath is the raw ?path= value (empty
+// string is valid and means "root"); hasPath distinguishes "no path
+// param" from "path param set to empty" so the caller can pick a
+// sensible default for the former (e.g. the note's parent directory).
 //
-// This function is the one seam future index modes should extend: adding
-// "search" or "tag" would return a mode discriminator and normalize any
-// extra params (q, t) the mode needs.
-func indexState(r *http.Request) (open bool, query string) {
-	mode := r.URL.Query().Get("index")
-	if mode == "" {
-		return false, ""
+// This function is the seam future index modes extend: adding
+// "search" or "tag" means returning a mode discriminator plus the
+// mode-specific extras the query encodes.
+func indexState(r *http.Request) (open bool, explicitPath string, hasPath bool) {
+	q := r.URL.Query()
+	if q.Get("index") != "dir" {
+		return false, "", false
 	}
-	// Only "dir" is understood today; unknown values collapse to closed
-	// rather than silently opening an empty panel.
-	if mode != "dir" {
-		return false, ""
+	raw, ok := q["path"]
+	if !ok {
+		return true, "", false
 	}
-	return true, "?index=dir"
+	return true, strings.Trim(raw[0], "/"), true
 }
 
-// toggleIndexHref returns the URL the hamburger should link to in order
-// to flip the index state on the current path. Preserving r.URL.Path
-// means the toggle reloads the same resource with just the query
-// adjusted — htmx boosts that as a fast swap.
-func toggleIndexHref(r *http.Request, open bool) string {
-	path := r.URL.Path
+// toggleHref returns the URL the hamburger should point at. When the
+// panel is open, the link strips the query and leaves just the note
+// path so a click closes the panel. When closed, the link adds the
+// panel with an explicit default path (the note's parent) so a click
+// opens the panel to the right directory.
+func toggleHref(notePath string, open bool, defaultPath string) string {
 	if open {
-		return path
+		return "/view/" + notePath
 	}
-	return path + "?index=dir"
+	return "/view/" + notePath + "?index=dir&path=" + url.QueryEscape(defaultPath)
 }
 
 // buildLayoutFields assembles the common chrome every page needs. The
-// caller provides the editable path (if any) so the edit button's form
-// action is pre-resolved with the index query preserved.
-func (s *Server) buildLayoutFields(r *http.Request, title, editPath string) layoutFields {
-	open, query := indexState(r)
+// effectivePath is the directory the panel is showing — already
+// resolved from either ?path= or a handler-specific default — so the
+// returned IndexQuery always renders with an explicit path and sticky
+// navigation works regardless of how the panel was opened.
+func (s *Server) buildLayoutFields(title, editPath string, open bool, effectivePath string) layoutFields {
 	lf := layoutFields{
 		Title:      title,
 		EditPath:   editPath,
 		IndexOpen:  open,
-		IndexQuery: query,
+		IndexQuery: indexQuery(open, effectivePath),
 		ShowToggle: true,
-		ToggleHref: toggleIndexHref(r, open),
 	}
 	if editPath != "" {
 		lf.EditHref = "/api/edit/" + editPath
@@ -73,9 +74,18 @@ func viewSSEWatch(filePath string) string {
 	return "/events?watch=" + url.QueryEscape(filePath)
 }
 
+// handleRoot is the entry point for both the legacy redirect behavior
+// and the standalone index panel (the replacement for /browse/). When
+// the request has no query params it preserves the old "redirect to
+// README if present, else show the root index" behavior. When
+// ?index=dir is set, it renders the standalone panel at ?path=.
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
+		return
+	}
+	if r.URL.Query().Get("index") == "dir" {
+		s.handleStandaloneIndex(w, r)
 		return
 	}
 	readme := filepath.Join(s.root, "README.md")
@@ -83,7 +93,59 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/view/README.md", http.StatusFound)
 		return
 	}
-	http.Redirect(w, r, "/browse/", http.StatusFound)
+	s.handleStandaloneIndex(w, r)
+}
+
+// handleStandaloneIndex renders the index panel as a page of its own,
+// with no note card. This is the Option B replacement for /browse/ —
+// the directory the panel shows comes from ?path= rather than from the
+// URL path component.
+func (s *Server) handleStandaloneIndex(w http.ResponseWriter, r *http.Request) {
+	panelPath := strings.Trim(r.URL.Query().Get("path"), "/")
+	absPath, err := SafePath(s.root, panelPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	stat, err := os.Stat(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !stat.IsDir() {
+		http.Error(w, "not a directory", http.StatusBadRequest)
+		return
+	}
+
+	lf := s.buildLayoutFields(dirTitle(panelPath), "", true, panelPath)
+	// No note is in context on the standalone page, so the hamburger
+	// has nothing to reveal/hide — hide it rather than render a
+	// link that would take the user to an empty screen.
+	lf.ShowToggle = false
+
+	card, err := s.buildDirIndex(panelPath, "")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	lf.IndexCard = card
+
+	go s.index.Build()
+
+	browse := BrowseData{
+		layoutFields: lf,
+		DirPath:      panelPath,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.templates.renderBrowse(w, browse); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (s *Server) handleView(w http.ResponseWriter, r *http.Request) {
@@ -105,6 +167,9 @@ func (s *Server) handleView(w http.ResponseWriter, r *http.Request) {
 	}
 
 	currentDir := filepath.Dir(reqPath)
+	if currentDir == "." {
+		currentDir = ""
+	}
 	html, fm, err := s.renderer.Render(data, currentDir)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -116,22 +181,26 @@ func (s *Server) handleView(w http.ResponseWriter, r *http.Request) {
 		title = fm.Title
 	}
 
-	lf := s.buildLayoutFields(r, title, reqPath)
+	// Resolve the panel's effective directory. When the panel is open
+	// and ?path= is absent we default to the note's own parent — this
+	// is the only case where the default matters because every link
+	// the server itself renders emits ?path= explicitly.
+	open, explicitPath, hasPath := indexState(r)
+	panelPath := currentDir
+	if open && hasPath {
+		panelPath = explicitPath
+	}
 
-	// Build the index card for the note's parent directory when the
-	// panel is open. Skip the filesystem walk entirely when it's
-	// closed — the card is unused and every byte counts for large
-	// notes trees.
-	if lf.IndexOpen {
-		parentRel := filepath.Dir(reqPath)
-		if parentRel == "." {
-			parentRel = ""
-		}
-		card, err := s.buildDirIndex(parentRel, lf.IndexQuery)
+	lf := s.buildLayoutFields(title, reqPath, open, panelPath)
+	lf.ToggleHref = toggleHref(reqPath, open, currentDir)
+
+	if open {
+		// A read failure (invalid ?path=, permissions, vanished dir)
+		// shouldn't 500 the note view — log and render without a card
+		// so the user still sees the note.
+		card, err := s.buildDirIndex(panelPath, reqPath)
 		if err != nil {
-			// A read failure in the parent dir shouldn't 500 the whole
-			// page — log and render without the card.
-			s.logger.Warn("index card read failed", "path", parentRel, "err", err)
+			s.logger.Warn("index card build failed", "path", panelPath, "err", err)
 		} else {
 			lf.IndexCard = card
 		}
@@ -153,68 +222,33 @@ func (s *Server) handleView(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleBrowse is a permanent redirect to the canonical
+// /?index=dir&path= form. The positional /browse/{dir} route is
+// retained purely as a compatibility shim for external bookmarks; the
+// server itself never generates /browse/ links anymore.
 func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
-	reqPath := r.PathValue("dirpath")
-	absPath, err := SafePath(s.root, reqPath)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if _, err := os.Stat(absPath); err != nil {
-		if os.IsNotExist(err) {
-			http.Error(w, "not found", http.StatusNotFound)
-			return
-		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	lf := s.buildLayoutFields(r, dirTitle(reqPath), "")
-	// The browse page IS the index card — it's always open here
-	// regardless of the ?index query, otherwise the page would be
-	// empty. The hamburger has no meaning on browse pages and the
-	// template hides it.
-	lf.IndexOpen = true
-	lf.ShowToggle = false
-
-	card, err := s.buildDirIndex(reqPath, lf.IndexQuery)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	lf.IndexCard = card
-
-	go s.index.Build()
-
-	browse := BrowseData{
-		layoutFields: lf,
-		DirPath:      reqPath,
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.templates.renderBrowse(w, browse); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	reqPath := strings.Trim(r.PathValue("dirpath"), "/")
+	target := "/?index=dir&path=" + url.QueryEscape(reqPath)
+	http.Redirect(w, r, target, http.StatusMovedPermanently)
 }
 
 // buildDirIndex assembles an IndexCard in directory mode for a path
-// relative to the notes root. The caller is responsible for URL-level
-// access control (SafePath) — this helper only walks an already-validated
-// directory.
-func (s *Server) buildDirIndex(relPath, indexQuery string) (*IndexCard, error) {
-	absPath, err := SafePath(s.root, relPath)
+// relative to the notes root. notePath is the note currently in view
+// (if any) — directory links in the resulting card will target that
+// note with an updated ?path= so the note stays visible when the user
+// navigates the panel. Pass "" for the standalone page.
+func (s *Server) buildDirIndex(panelPath, notePath string) (*IndexCard, error) {
+	absPath, err := SafePath(s.root, panelPath)
 	if err != nil {
 		return nil, err
 	}
-	entries, err := readDirEntries(absPath, relPath, indexQuery)
+	entries, err := readDirEntries(absPath, panelPath, notePath)
 	if err != nil {
 		return nil, err
 	}
 	return &IndexCard{
 		Mode:        "dir",
-		Breadcrumbs: buildBreadcrumbs(relPath, false, indexQuery),
+		Breadcrumbs: buildBreadcrumbs(panelPath, notePath),
 		Entries:     entries,
 		Empty:       "No files here.",
 	}, nil

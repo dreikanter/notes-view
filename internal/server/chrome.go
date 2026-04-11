@@ -1,29 +1,58 @@
 package server
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 )
 
-// buildBreadcrumbs constructs the breadcrumbs trail for a given path. The
-// resulting Hrefs include indexQuery so that every intermediate link
-// preserves the current index-panel state across HTMX-boosted navigation.
-//
-// Regardless of isFile, intermediate segments link to /browse/ and the
-// final segment is marked Current (no link): when isFile is true the
-// final segment names the current file, when isFile is false it names
-// the current directory.
-func buildBreadcrumbs(path string, isFile bool, indexQuery string) BreadcrumbsData {
-	data := BreadcrumbsData{
-		HomeHref: "/browse/" + indexQuery,
+// indexQuery formats the canonical query suffix that preserves the
+// panel's state across links. Empty string means closed. When open the
+// panel path is always explicit — callers must resolve any default
+// (e.g. the note's parent directory) before constructing the query —
+// so the rendered URL is unambiguous and sticky navigation works.
+func indexQuery(open bool, path string) string {
+	if !open {
+		return ""
 	}
-	path = strings.Trim(path, "/")
-	if path == "" {
+	return "?index=dir&path=" + url.QueryEscape(path)
+}
+
+// dirLinkHref builds an href that repositions the index panel to a new
+// directory while preserving the current note (sticky model). notePath
+// is the note that should stay visible, or "" for the standalone index
+// page where there's no note to keep.
+func dirLinkHref(notePath, dirPath string) string {
+	q := "?index=dir&path=" + url.QueryEscape(dirPath)
+	if notePath == "" {
+		return "/" + q
+	}
+	return "/view/" + notePath + q
+}
+
+// fileLinkHref builds an href that changes the note while keeping the
+// panel on the same directory. This is the other half of the sticky
+// model: clicking a sibling file swaps the note card; the panel stays.
+func fileLinkHref(filePath, panelPath string) string {
+	return "/view/" + filePath + "?index=dir&path=" + url.QueryEscape(panelPath)
+}
+
+// buildBreadcrumbs constructs the panel's header trail. Intermediate
+// segments link back up the directory chain via dirLinkHref so a click
+// only repositions the panel — the note card is untouched. The final
+// segment is marked Current (no link) since it's the directory the
+// panel is already showing.
+func buildBreadcrumbs(panelPath, notePath string) BreadcrumbsData {
+	data := BreadcrumbsData{
+		HomeHref: dirLinkHref(notePath, ""),
+	}
+	panelPath = strings.Trim(panelPath, "/")
+	if panelPath == "" {
 		return data
 	}
-	segments := strings.Split(path, "/")
+	segments := strings.Split(panelPath, "/")
 	accumulated := ""
 	for i, seg := range segments {
 		if accumulated == "" {
@@ -31,23 +60,23 @@ func buildBreadcrumbs(path string, isFile bool, indexQuery string) BreadcrumbsDa
 		} else {
 			accumulated += "/" + seg
 		}
-		isLast := i == len(segments)-1
-		if isLast {
+		if i == len(segments)-1 {
 			data.Crumbs = append(data.Crumbs, Crumb{Label: seg, Current: true})
 			continue
 		}
 		data.Crumbs = append(data.Crumbs, Crumb{
 			Label: seg,
-			Href:  "/browse/" + accumulated + indexQuery,
+			Href:  dirLinkHref(notePath, accumulated),
 		})
 	}
 	return data
 }
 
 // readDirEntries returns the visible entries of a notes directory as
-// IndexEntry values. The Href for each entry already includes indexQuery
-// so that clicking a link preserves the index-panel state.
-func readDirEntries(absPath, relPath, indexQuery string) ([]IndexEntry, error) {
+// IndexEntry values. Directory entries link through dirLinkHref so the
+// note stays put on click; file entries link through fileLinkHref so
+// the panel stays put on click.
+func readDirEntries(absPath, relPath, notePath string) ([]IndexEntry, error) {
 	dirEntries, err := os.ReadDir(absPath)
 	if err != nil {
 		return nil, err
@@ -61,15 +90,15 @@ func readDirEntries(absPath, relPath, indexQuery string) ([]IndexEntry, error) {
 		if !de.IsDir() && !strings.HasSuffix(name, ".md") {
 			continue
 		}
-		entryPath := name
+		entryRel := name
 		if relPath != "" {
-			entryPath = filepath.ToSlash(filepath.Join(relPath, name))
+			entryRel = filepath.ToSlash(filepath.Join(relPath, name))
 		}
 		var href string
 		if de.IsDir() {
-			href = "/browse/" + entryPath + indexQuery
+			href = dirLinkHref(notePath, entryRel)
 		} else {
-			href = "/view/" + entryPath + indexQuery
+			href = fileLinkHref(entryRel, relPath)
 		}
 		entries = append(entries, IndexEntry{
 			Name:  name,

@@ -67,9 +67,9 @@ func TestViewHandler(t *testing.T) {
 
 // TestViewHandlerWithIndex covers the 2-panel mode: when `?index=dir`
 // is set, the index card for the note's parent directory is rendered
-// alongside the note card, and every link in the card preserves the
-// index query string so navigating between siblings keeps the panel
-// open.
+// alongside the note card. Absent ?path=, the handler defaults the
+// panel to the note's parent and emits explicit ?path= on every link
+// so subsequent navigation is sticky.
 func TestViewHandlerWithIndex(t *testing.T) {
 	srv, _ := setupTestServer(t)
 	handler := srv.Routes()
@@ -85,24 +85,22 @@ func TestViewHandlerWithIndex(t *testing.T) {
 	if !strings.Contains(body, `class="index-card`) {
 		t.Errorf("expected index card with ?index=dir, got: %s", body)
 	}
-	// Sibling links should carry the index query so toggling persists.
-	if !strings.Contains(body, `href="/view/2026/03/20260331_9201_todo.md?index=dir"`) {
-		t.Errorf("expected sibling file link to preserve ?index=dir")
+	// Breadcrumb intermediate segments go back to the SAME note with
+	// an updated ?path= so clicking them only moves the panel.
+	if !strings.Contains(body, `href="/view/2026/03/20260331_9201_todo.md?index=dir&amp;path=2026"`) {
+		t.Errorf("expected breadcrumb link to target current note with ?path=2026, got: %s", body)
 	}
-	// Breadcrumb intermediate segments should also preserve the query.
-	if !strings.Contains(body, `href="/browse/2026?index=dir"`) {
-		t.Errorf("expected breadcrumb link to preserve ?index=dir, got: %s", body)
-	}
-	// Hamburger toggles index off by linking to the path without query.
+	// Hamburger toggles index off by stripping the query entirely.
 	if !strings.Contains(body, `id="index-toggle"`) ||
 		!strings.Contains(body, `href="/view/2026/03/20260331_9201_todo.md"`) {
 		t.Errorf("expected toggle href to strip ?index when open, got: %s", body)
 	}
 }
 
-// TestViewHandlerToggleClosed pins the inverse: when the index is closed
-// the hamburger link must point at the same path with ?index=dir so a
-// click opens the panel.
+// TestViewHandlerToggleClosed pins the inverse: when the index is
+// closed the hamburger link adds ?index=dir with an explicit ?path=
+// pointing at the note's own parent, so a click opens the panel to
+// the expected directory.
 func TestViewHandlerToggleClosed(t *testing.T) {
 	srv, _ := setupTestServer(t)
 	handler := srv.Routes()
@@ -113,26 +111,72 @@ func TestViewHandlerToggleClosed(t *testing.T) {
 
 	body := w.Body.String()
 	if !strings.Contains(body, `id="index-toggle"`) ||
-		!strings.Contains(body, `href="/view/README.md?index=dir"`) {
-		t.Errorf("expected toggle href to add ?index=dir when closed, got: %s", body)
+		!strings.Contains(body, `href="/view/README.md?index=dir&amp;path="`) {
+		t.Errorf("expected toggle href to add ?index=dir&path= when closed, got: %s", body)
 	}
 }
 
 // TestViewHandlerLiveReloadPreservesIndex guards against the SSE
 // live-reload fetch collapsing the index panel. The note card carries
-// hx-get pointing at its own URL; if that URL omits the index query,
-// every file save would re-render the page with the panel closed.
+// hx-get pointing at its own URL; that URL must include the full
+// index query (mode + path) so file saves re-render with the panel
+// and its current directory intact.
 func TestViewHandlerLiveReloadPreservesIndex(t *testing.T) {
 	srv, _ := setupTestServer(t)
 	handler := srv.Routes()
 
-	req := httptest.NewRequest("GET", "/view/README.md?index=dir", nil)
+	req := httptest.NewRequest("GET", "/view/README.md?index=dir&path=2026", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
 	body := w.Body.String()
-	if !strings.Contains(body, `hx-get="/view/README.md?index=dir"`) {
-		t.Errorf("expected hx-get to preserve ?index=dir for live reload, got: %s", body)
+	if !strings.Contains(body, `hx-get="/view/README.md?index=dir&amp;path=2026"`) {
+		t.Errorf("expected hx-get to preserve ?index=dir&path=2026, got: %s", body)
+	}
+}
+
+// TestViewHandlerStickyPath covers the core sticky-model promise:
+// clicking a note from an index panel at a non-parent directory must
+// keep the panel on that directory when the next page renders.
+// Passing ?path=2026 while viewing README.md means the panel shows
+// 2026/, and file entries inside it link to /view/2026/<file>?path=2026.
+func TestViewHandlerStickyPath(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	handler := srv.Routes()
+
+	req := httptest.NewRequest("GET", "/view/README.md?index=dir&path=2026", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	// The panel shows 2026/, so its entries are the 03/ subdir. A
+	// click on 03/ must keep README.md in view and only move ?path=.
+	if !strings.Contains(body, `href="/view/README.md?index=dir&amp;path=2026%2F03"`) {
+		t.Errorf("expected dir entry to target current note with ?path=2026%%2F03, got: %s", body)
+	}
+}
+
+// TestViewHandlerPathSurvivesSelfLinks covers the other sticky
+// direction: entries inside the panel that are themselves files
+// (sibling notes) link to those files with the current ?path=
+// preserved, so clicking them changes the note card without resetting
+// the panel directory.
+func TestViewHandlerPathSurvivesSelfLinks(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	handler := srv.Routes()
+
+	req := httptest.NewRequest("GET", "/view/README.md?index=dir&path=2026%2F03", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	body := w.Body.String()
+	// The 2026/03 panel lists 20260331_9201_todo.md. Its link must
+	// carry ?path=2026%2F03 so clicking it keeps the panel on 2026/03.
+	if !strings.Contains(body, `href="/view/2026/03/20260331_9201_todo.md?index=dir&amp;path=2026%2F03"`) {
+		t.Errorf("expected file entry to preserve ?path=2026%%2F03, got: %s", body)
 	}
 }
 
@@ -149,11 +193,78 @@ func TestViewHandler404(t *testing.T) {
 	}
 }
 
-func TestBrowseHandler(t *testing.T) {
+// TestBrowseRedirect pins the compatibility shim: legacy /browse/
+// URLs 301 to the canonical /?index=dir&path= form so external
+// bookmarks keep working after the route collapse.
+func TestBrowseRedirect(t *testing.T) {
 	srv, _ := setupTestServer(t)
 	handler := srv.Routes()
 
-	req := httptest.NewRequest("GET", "/browse/", nil)
+	cases := []struct {
+		req, want string
+	}{
+		{"/browse/", "/?index=dir&path="},
+		{"/browse/2026", "/?index=dir&path=2026"},
+		{"/browse/2026/03", "/?index=dir&path=2026%2F03"},
+	}
+	for _, c := range cases {
+		req := httptest.NewRequest("GET", c.req, nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusMovedPermanently {
+			t.Errorf("%s: status = %d, want 301", c.req, w.Code)
+			continue
+		}
+		if got := w.Header().Get("Location"); got != c.want {
+			t.Errorf("%s: Location = %q, want %q", c.req, got, c.want)
+		}
+	}
+}
+
+// TestStandaloneIndex covers the Option B "no note" page: GET
+// /?index=dir&path=<dir> renders the index card at that directory
+// with no note card, hamburger hidden, and entry links that target
+// the standalone route (since there's no note to preserve).
+func TestStandaloneIndex(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	handler := srv.Routes()
+
+	req := httptest.NewRequest("GET", "/?index=dir&path=", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `class="index-card`) {
+		t.Errorf("expected index card on standalone page")
+	}
+	if strings.Contains(body, `class="note-card`) {
+		t.Errorf("standalone page must not render a note card")
+	}
+	if strings.Contains(body, `id="index-toggle"`) {
+		t.Errorf("standalone page must not render hamburger")
+	}
+	// Directory entries on the standalone page link to / (no note).
+	if !strings.Contains(body, `href="/?index=dir&amp;path=2026"`) {
+		t.Errorf("expected standalone dir entry link, got: %s", body)
+	}
+	// File entries open /view/<file> but carry the current ?path= so
+	// the panel stays on the same directory after the click.
+	if !strings.Contains(body, `href="/view/README.md?index=dir&amp;path="`) {
+		t.Errorf("expected standalone file entry to open /view with ?path, got: %s", body)
+	}
+}
+
+// TestStandaloneIndexSubdir exercises a non-root path on the
+// standalone page to make sure breadcrumbs and entries resolve
+// relative to the nested directory.
+func TestStandaloneIndexSubdir(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	handler := srv.Routes()
+
+	req := httptest.NewRequest("GET", "/?index=dir&path=2026", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -161,23 +272,13 @@ func TestBrowseHandler(t *testing.T) {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, `data-dir-path=""`) {
-		t.Errorf("expected #content data-dir-path in body")
+	// 2026/ contains only the 03/ subdir.
+	if !strings.Contains(body, `href="/?index=dir&amp;path=2026%2F03"`) {
+		t.Errorf("expected 03/ subdir link, got: %s", body)
 	}
-	if !strings.Contains(body, `href="/browse/2026"`) {
-		t.Errorf("expected browse link for 2026/, got: %s", body)
-	}
-	if !strings.Contains(body, `href="/view/README.md"`) {
-		t.Errorf("expected view link for README.md")
-	}
-	// Browse page IS the index card so it's always rendered.
-	if !strings.Contains(body, `class="index-card`) {
-		t.Errorf("expected index card on browse page")
-	}
-	// The hamburger has no meaning on browse pages (nothing to reveal)
-	// and must not be rendered.
-	if strings.Contains(body, `id="index-toggle"`) {
-		t.Errorf("expected no index toggle on browse page")
+	// Breadcrumb home link strips the path.
+	if !strings.Contains(body, `href="/?index=dir&amp;path="`) {
+		t.Errorf("expected home breadcrumb to /?index=dir&path=, got: %s", body)
 	}
 }
 

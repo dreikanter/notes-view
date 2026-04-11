@@ -62,7 +62,9 @@ func TestIntegrationSmoke(t *testing.T) {
 		t.Errorf("view: expected markdown-body wrapper in HTML")
 	}
 
-	// Test: browse root
+	// Test: standalone index at root (replaces the /browse/ route).
+	// The default client follows the 301 from /browse/ through to
+	// /?index=dir&path= so legacy URLs keep working.
 	resp, err = http.Get(ts.URL + "/browse/")
 	if err != nil {
 		t.Fatal(err)
@@ -72,8 +74,9 @@ func TestIntegrationSmoke(t *testing.T) {
 		t.Fatalf("browse: status = %d", resp.StatusCode)
 	}
 	browseBody, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(browseBody), `href="/view/README.md"`) {
-		t.Errorf("browse: expected README link in body")
+	// File entries on the standalone page open /view/<file>?index=dir&path=<current>.
+	if !strings.Contains(string(browseBody), `href="/view/README.md?index=dir`) {
+		t.Errorf("browse: expected README link in body, got: %s", browseBody)
 	}
 
 	// Test: raw endpoint
