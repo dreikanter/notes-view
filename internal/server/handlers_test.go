@@ -193,35 +193,7 @@ func TestViewHandler404(t *testing.T) {
 	}
 }
 
-// TestBrowseRedirect pins the compatibility shim: legacy /browse/
-// URLs 301 to the canonical /?index=dir&path= form so external
-// bookmarks keep working after the route collapse.
-func TestBrowseRedirect(t *testing.T) {
-	srv, _ := setupTestServer(t)
-	handler := srv.Routes()
-
-	cases := []struct {
-		req, want string
-	}{
-		{"/browse/", "/?index=dir&path="},
-		{"/browse/2026", "/?index=dir&path=2026"},
-		{"/browse/2026/03", "/?index=dir&path=2026%2F03"},
-	}
-	for _, c := range cases {
-		req := httptest.NewRequest("GET", c.req, nil)
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, req)
-		if w.Code != http.StatusMovedPermanently {
-			t.Errorf("%s: status = %d, want 301", c.req, w.Code)
-			continue
-		}
-		if got := w.Header().Get("Location"); got != c.want {
-			t.Errorf("%s: Location = %q, want %q", c.req, got, c.want)
-		}
-	}
-}
-
-// TestStandaloneIndex covers the Option B "no note" page: GET
+// TestStandaloneIndex covers the "no note" page: GET
 // /?index=dir&path=<dir> renders the index card at that directory
 // with no note card, hamburger hidden, and entry links that target
 // the standalone route (since there's no note to preserve).

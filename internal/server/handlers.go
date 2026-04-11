@@ -74,11 +74,11 @@ func viewSSEWatch(filePath string) string {
 	return "/events?watch=" + url.QueryEscape(filePath)
 }
 
-// handleRoot is the entry point for both the legacy redirect behavior
-// and the standalone index panel (the replacement for /browse/). When
-// the request has no query params it preserves the old "redirect to
-// README if present, else show the root index" behavior. When
-// ?index=dir is set, it renders the standalone panel at ?path=.
+// handleRoot is the entry point for the standalone index panel and
+// the README shortcut. When the request has no query params it
+// redirects to README if one exists, otherwise renders the panel at
+// the root. When ?index=dir is set, it renders the standalone panel
+// at whatever ?path= points at.
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -97,9 +97,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleStandaloneIndex renders the index panel as a page of its own,
-// with no note card. This is the Option B replacement for /browse/ —
-// the directory the panel shows comes from ?path= rather than from the
-// URL path component.
+// with no note card. The directory the panel shows comes from ?path=.
 func (s *Server) handleStandaloneIndex(w http.ResponseWriter, r *http.Request) {
 	panelPath := strings.Trim(r.URL.Query().Get("path"), "/")
 	absPath, err := SafePath(s.root, panelPath)
@@ -220,16 +218,6 @@ func (s *Server) handleView(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-}
-
-// handleBrowse is a permanent redirect to the canonical
-// /?index=dir&path= form. The positional /browse/{dir} route is
-// retained purely as a compatibility shim for external bookmarks; the
-// server itself never generates /browse/ links anymore.
-func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
-	reqPath := strings.Trim(r.PathValue("dirpath"), "/")
-	target := "/?index=dir&path=" + url.QueryEscape(reqPath)
-	http.Redirect(w, r, target, http.StatusMovedPermanently)
 }
 
 // buildDirIndex assembles an IndexCard in directory mode for a path
