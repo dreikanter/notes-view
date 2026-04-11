@@ -52,7 +52,14 @@ func NewRenderer(idx *index.Index) *Renderer {
 	return &Renderer{md: md, index: idx}
 }
 
-func (r *Renderer) Render(source []byte, currentDir string) (string, *Frontmatter, error) {
+// Render converts markdown to HTML. currentDir is the relative
+// directory of the note being rendered (used to resolve
+// `[text](./rel.md)` style links). linkQuery is appended as-is to
+// every /view/... href the post-processor generates, so the caller
+// can thread the current index-panel state through into note
+// content and preserve the panel across wiki-link navigation. Pass
+// "" when there is no panel state to preserve.
+func (r *Renderer) Render(source []byte, currentDir, linkQuery string) (string, *Frontmatter, error) {
 	ctx := parser.NewContext()
 	var buf bytes.Buffer
 	if err := r.md.Convert(source, &buf, parser.WithContext(ctx)); err != nil {
@@ -84,7 +91,7 @@ func (r *Renderer) Render(source []byte, currentDir string) (string, *Frontmatte
 	html := buf.String()
 	html = processTaskSyntax(html)
 	if r.index != nil {
-		html = processNoteLinks(html, r.index, currentDir)
+		html = processNoteLinks(html, r.index, currentDir, linkQuery)
 	}
 	if fm != nil && fm.Title != "" {
 		html = stripRedundantTitle(html, fm.Title)

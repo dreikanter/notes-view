@@ -168,7 +168,21 @@ func (s *Server) handleView(w http.ResponseWriter, r *http.Request) {
 	if currentDir == "." {
 		currentDir = ""
 	}
-	html, fm, err := s.renderer.Render(data, currentDir)
+
+	// Resolve the panel's effective directory. When the panel is open
+	// and ?path= is absent we default to the note's own parent — this
+	// is the only case where the default matters because every link
+	// the server itself renders emits ?path= explicitly. The resolved
+	// query is also threaded into the renderer so note-content links
+	// preserve the panel state across clicks.
+	open, explicitPath, hasPath := indexState(r)
+	panelPath := currentDir
+	if open && hasPath {
+		panelPath = explicitPath
+	}
+	linkQuery := indexQuery(open, panelPath)
+
+	html, fm, err := s.renderer.Render(data, currentDir, linkQuery)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -177,16 +191,6 @@ func (s *Server) handleView(w http.ResponseWriter, r *http.Request) {
 	title := filepath.Base(reqPath)
 	if fm != nil && fm.Title != "" {
 		title = fm.Title
-	}
-
-	// Resolve the panel's effective directory. When the panel is open
-	// and ?path= is absent we default to the note's own parent — this
-	// is the only case where the default matters because every link
-	// the server itself renders emits ?path= explicitly.
-	open, explicitPath, hasPath := indexState(r)
-	panelPath := currentDir
-	if open && hasPath {
-		panelPath = explicitPath
 	}
 
 	lf := s.buildLayoutFields(title, reqPath, open, panelPath)

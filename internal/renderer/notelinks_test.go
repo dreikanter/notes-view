@@ -24,7 +24,7 @@ func TestNoteProtocolLink(t *testing.T) {
 	idx := setupTestIndex(t)
 	r := NewRenderer(idx)
 	input := `See [my todo](note://20260331_9201) for details.`
-	html, _, err := r.Render([]byte(input), "")
+	html, _, err := r.Render([]byte(input), "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestBrokenNoteLink(t *testing.T) {
 	idx := setupTestIndex(t)
 	r := NewRenderer(idx)
 	input := `See [missing](note://99999999_0000) link.`
-	html, _, err := r.Render([]byte(input), "")
+	html, _, err := r.Render([]byte(input), "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestAutoLinkUID(t *testing.T) {
 	idx := setupTestIndex(t)
 	r := NewRenderer(idx)
 	input := `Refer to 20260331_9201 for the todo list.`
-	html, _, err := r.Render([]byte(input), "")
+	html, _, err := r.Render([]byte(input), "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestAutoLinkUIDNoMatch(t *testing.T) {
 	idx := setupTestIndex(t)
 	r := NewRenderer(idx)
 	input := `Reference 99999999_0000 does not exist.`
-	html, _, err := r.Render([]byte(input), "")
+	html, _, err := r.Render([]byte(input), "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,11 +77,37 @@ func TestRelativeMdLink(t *testing.T) {
 	idx := setupTestIndex(t)
 	r := NewRenderer(idx)
 	input := `See [other note](../01/20260102_8814.md) for details.`
-	html, _, err := r.Render([]byte(input), "2026/03")
+	html, _, err := r.Render([]byte(input), "2026/03", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(html, `href="/view/2026/01/20260102_8814.md"`) {
 		t.Errorf("relative .md link not rewritten:\n%s", html)
+	}
+}
+
+// TestNoteLinksPreserveIndexQuery pins the wiki-link state-preservation
+// contract: when the renderer is handed a non-empty linkQuery, every
+// /view/... href it produces must carry that suffix so clicking an
+// in-note link keeps the caller's index-panel state intact.
+func TestNoteLinksPreserveIndexQuery(t *testing.T) {
+	idx := setupTestIndex(t)
+	r := NewRenderer(idx)
+	input := `See [todo](note://20260331_9201), also [rel](../01/20260102_8814.md), and bare 20260331_9201 UID.`
+	html, _, err := r.Render([]byte(input), "2026/03", "?index=dir&path=2026%2F03")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// note:// protocol link
+	if !strings.Contains(html, `href="/view/2026/03/20260331_9201_todo.md?index=dir&path=2026%2F03"`) {
+		t.Errorf("note:// link dropped linkQuery:\n%s", html)
+	}
+	// relative .md link
+	if !strings.Contains(html, `href="/view/2026/01/20260102_8814.md?index=dir&path=2026%2F03"`) {
+		t.Errorf("relative .md link dropped linkQuery:\n%s", html)
+	}
+	// bare UID auto-link
+	if !strings.Contains(html, `<a href="/view/2026/03/20260331_9201_todo.md?index=dir&path=2026%2F03" class="uid-link">`) {
+		t.Errorf("bare UID auto-link dropped linkQuery:\n%s", html)
 	}
 }

@@ -13,7 +13,12 @@ var noteProtoRe = regexp.MustCompile(`href="note://(\d{8}_\d+)"`)
 var relativeMdRe = regexp.MustCompile(`href="([^"]+\.md)"`)
 var uidInTextRe = regexp.MustCompile(`\b(\d{8}_\d{4,})\b`)
 
-func processNoteLinks(html string, idx *index.Index, currentDir string) string {
+// processNoteLinks rewrites three kinds of in-note links into /view/
+// URLs: `note://<uid>` protocol links, relative `.md` links, and bare
+// UIDs in text. linkQuery is appended verbatim to every generated
+// href so the caller can thread the current index-panel state
+// through; pass "" when there is no state to preserve.
+func processNoteLinks(html string, idx *index.Index, currentDir, linkQuery string) string {
 	// 1. Resolve note:// protocol links
 	html = noteProtoRe.ReplaceAllStringFunc(html, func(match string) string {
 		sub := noteProtoRe.FindStringSubmatch(match)
@@ -22,7 +27,7 @@ func processNoteLinks(html string, idx *index.Index, currentDir string) string {
 		}
 		uid := sub[1]
 		if relPath, ok := idx.Lookup(uid); ok {
-			return fmt.Sprintf(`href="/view/%s"`, relPath)
+			return fmt.Sprintf(`href="/view/%s%s"`, relPath, linkQuery)
 		}
 		return fmt.Sprintf(`href="#" class="broken-link" title="Note %s not found"`, uid)
 	})
@@ -40,7 +45,7 @@ func processNoteLinks(html string, idx *index.Index, currentDir string) string {
 		}
 		resolved := path.Clean(path.Join(currentDir, relLink))
 		resolved = strings.TrimPrefix(resolved, "/")
-		return fmt.Sprintf(`href="/view/%s"`, resolved)
+		return fmt.Sprintf(`href="/view/%s%s"`, resolved, linkQuery)
 	})
 
 	// 3. Auto-link bare UIDs in text content (not inside HTML tags)
@@ -49,7 +54,7 @@ func processNoteLinks(html string, idx *index.Index, currentDir string) string {
 		if !strings.HasPrefix(part, "<") {
 			parts[i] = uidInTextRe.ReplaceAllStringFunc(part, func(match string) string {
 				if relPath, ok := idx.Lookup(match); ok {
-					return fmt.Sprintf(`<a href="/view/%s" class="uid-link">%s</a>`, relPath, match)
+					return fmt.Sprintf(`<a href="/view/%s%s" class="uid-link">%s</a>`, relPath, linkQuery, match)
 				}
 				return match
 			})
