@@ -69,8 +69,8 @@ func TestIntegrationSmoke(t *testing.T) {
 		t.Fatalf("browse: status = %d", resp.StatusCode)
 	}
 	browseBody, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(browseBody), `class="dir-listing"`) {
-		t.Errorf("browse: expected dir-listing in body")
+	if !strings.Contains(string(browseBody), `href="/view/README.md"`) {
+		t.Errorf("browse: expected README link in body")
 	}
 
 	// Test: raw endpoint

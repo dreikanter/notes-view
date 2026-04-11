@@ -43,7 +43,7 @@ function refreshSidebarActive() {
 document.addEventListener('click', function (e) {
   if (e.target.closest('#sidebar-toggle')) {
     var sidebar = document.getElementById('sidebar');
-    if (sidebar) sidebar.classList.toggle('hidden');
+    if (sidebar) sidebar.classList.toggle('sidebar-collapsed');
   }
 });
 

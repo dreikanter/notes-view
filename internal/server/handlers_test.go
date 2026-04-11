@@ -34,11 +34,12 @@ func TestViewHandler(t *testing.T) {
 	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
 		t.Errorf("Content-Type = %q, want text/html", ct)
 	}
-	// Frontmatter should be rendered by the layout.
-	if !strings.Contains(body, `class="fm-title"`) || !strings.Contains(body, "Todo") {
-		t.Errorf("expected frontmatter title in body, got: %s", body)
+	// The frontmatter title should appear as an <h1> in a bordered bar.
+	if !strings.Contains(body, "<h1") || !strings.Contains(body, ">Todo<") {
+		t.Errorf("expected frontmatter title <h1> in body, got: %s", body)
 	}
-	if !strings.Contains(body, `class="fm-tag"`) {
+	// Each tag becomes a <li> inside the tag list.
+	if !strings.Contains(body, ">todo<") || !strings.Contains(body, ">daily<") {
 		t.Errorf("expected frontmatter tags in body")
 	}
 	// The SSE wrapper should reference the file path.
@@ -76,8 +77,8 @@ func TestBrowseHandler(t *testing.T) {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, `class="dir-listing"`) {
-		t.Errorf("expected dir-listing in body")
+	if !strings.Contains(body, `data-dir-path=""`) {
+		t.Errorf("expected #content data-dir-path in body")
 	}
 	if !strings.Contains(body, `href="/browse/2026"`) {
 		t.Errorf("expected browse link for 2026/, got: %s", body)
