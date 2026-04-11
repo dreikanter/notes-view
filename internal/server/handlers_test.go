@@ -137,6 +137,127 @@ func TestRootRedirect(t *testing.T) {
 	}
 }
 
+func TestEditHandlerNoEditor(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	handler := srv.Routes()
+
+	req := httptest.NewRequest("POST", "/api/edit/README.md", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (no editor)", w.Code)
+	}
+}
+
+// TestEditHandlerWhitespaceEditor guards against a nil-slice panic when
+// the editor env var is non-empty but contains only whitespace: the
+// `s.editor == ""` guard passes, strings.Fields returns an empty slice,
+// and a naive fields[0] indexing crashes the handler. The handler must
+// treat whitespace-only config as "not configured" and return 400.
+func TestEditHandlerWhitespaceEditor(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "note.md"), []byte("# Hi"), 0o644); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+	srv, err := NewServer(dir, "   \t  ")
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	handler := srv.Routes()
+
+	req := httptest.NewRequest("POST", "/api/edit/note.md", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400, body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestEditHandlerBadPath(t *testing.T) {
+	dir := t.TempDir()
+	srv, err := NewServer(dir, "true")
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	handler := srv.Routes()
+
+	req := httptest.NewRequest("POST", "/api/edit/../etc/passwd", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+}
+
+// TestEditHandlerSimpleEditor pins the success path for a plain editor
+// binary. Uses `true` so the test does not depend on any real editor.
+func TestEditHandlerSimpleEditor(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "note.md"), []byte("# Hi"), 0o644); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+	srv, err := NewServer(dir, "true")
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	handler := srv.Routes()
+
+	req := httptest.NewRequest("POST", "/api/edit/note.md", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"status":"ok"`) {
+		t.Errorf("body = %q, want status:ok", w.Body.String())
+	}
+}
+
+// TestEditHandlerEditorWithArgs is the regression guard for #7: an $EDITOR
+// value with embedded arguments (e.g. `subl -w`, `code --wait`,
+// `nvim -R`) must be parsed into binary + args rather than treated as a
+// single binary name, otherwise exec() 500s with "file not found".
+func TestEditHandlerEditorWithArgs(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "note.md"), []byte("# Hi"), 0o644); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+	// `true` ignores all of these extra flags, so they're harmless, but a
+	// naive exec.Command would look for a literal binary named
+	// `"true --wait"` and fail.
+	srv, err := NewServer(dir, "true --wait -n")
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	handler := srv.Routes()
+
+	req := httptest.NewRequest("POST", "/api/edit/note.md", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestShellQuote(t *testing.T) {
+	cases := map[string]string{
+		"simple":                `'simple'`,
+		"with space":            `'with space'`,
+		"with'quote":            `'with'\''quote'`,
+		"/path/to/note's me.md": `'/path/to/note'\''s me.md'`,
+	}
+	for in, want := range cases {
+		if got := shellQuote(in); got != want {
+			t.Errorf("shellQuote(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestViewStripsRedundantH1(t *testing.T) {
 	srv, _ := setupTestServer(t)
 	handler := srv.Routes()
