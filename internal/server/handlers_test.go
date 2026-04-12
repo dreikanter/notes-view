@@ -176,8 +176,8 @@ func TestViewHandlerSidebarPartial(t *testing.T) {
 	if strings.Contains(body, `id="topbar"`) {
 		t.Errorf("sidebar partial should not contain the topbar, got: %s", body)
 	}
-	if !strings.Contains(body, `aria-label="Home"`) {
-		t.Errorf("sidebar partial should contain breadcrumbs home link, got: %s", body)
+	if !strings.Contains(body, `aria-label="Root"`) {
+		t.Errorf("sidebar partial should contain breadcrumbs root link, got: %s", body)
 	}
 	// The sidebar shows 2026/, whose entries include 03/. Verify the
 	// sidebar content reflects the requested ?dir= parameter — not the

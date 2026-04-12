@@ -1,5 +1,5 @@
 {{ define "breadcrumbs" }}<nav class="flex-1 flex items-center gap-1 text-sm text-gray-500 overflow-hidden whitespace-nowrap">
-  <a class="text-blue-600 no-underline hover:underline" href="{{ .HomeHref }}" hx-boost="true" hx-target="#sidebar" hx-swap="innerHTML" aria-label="Home">&#8962;</a>
+  <a class="text-blue-600 no-underline hover:underline" href="{{ .HomeHref }}" hx-boost="true" hx-target="#sidebar" hx-swap="innerHTML" aria-label="Root">Root</a>
   {{ range .Crumbs }}
   <span class="text-gray-400 select-none">/</span>
   {{ if .Current }}
