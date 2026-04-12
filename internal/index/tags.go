@@ -62,6 +62,7 @@ func (ti *TagIndex) Build() error {
 		if err != nil {
 			return nil
 		}
+		rel = filepath.ToSlash(rel)
 
 		fileTags := parseFrontmatterTags(path)
 
@@ -202,6 +203,10 @@ func parseFrontmatterTags(path string) []string {
 				}
 			}
 		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil
 	}
 
 	return tags

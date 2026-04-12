@@ -98,9 +98,9 @@ No new template files — all modes fit within `index_card` by switching on `.Mo
 Plain JS (Alpine.js migration deferred to #54). Light footprint:
 
 **localStorage keys:**
-- `sidebar-mode`: `"files"`, `"tags"`, or `"tag"`
-- `sidebar-tag`: active tag name (when mode is `"tag"`)
-- `sidebar-dir`: active directory (when mode is `"files"`)
+- `notesview.sidebarMode`: `"files"`, `"tags"`, or `"tag"`
+- `notesview.sidebarTag`: active tag name (when mode is `"tag"`)
+- `notesview.sidebarDir`: active directory (when mode is `"files"`)
 
 **Page load:**
 1. Server renders files-mode sidebar (default)

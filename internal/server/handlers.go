@@ -313,7 +313,7 @@ func (s *Server) handleTagNotes(w http.ResponseWriter, r *http.Request) {
 	entries := make([]IndexEntry, len(notes))
 	for i, notePath := range notes {
 		entries[i] = IndexEntry{
-			Name: filepath.Base(notePath),
+			Name: notePath,
 			Href: "/view/" + viewPath(notePath),
 		}
 	}

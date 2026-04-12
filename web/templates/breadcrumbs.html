@@ -14,7 +14,7 @@
   {{ if .Current }}
   <span aria-current="page" class="text-gray-900 overflow-hidden text-ellipsis">{{ .Label }}</span>
   {{ else }}
-  <a class="text-blue-600 no-underline hover:underline" href="{{ .Href }}" hx-get="{{ .Href }}" hx-target="#sidebar" hx-swap="innerHTML">{{ .Label }}</a>
+  <a class="text-blue-600 no-underline hover:underline" href="{{ .Href }}" hx-get="{{ .Href }}" hx-target="#sidebar" hx-swap="innerHTML" onclick="setSidebarDir('{{ .Href }}')">{{ .Label }}</a>
   {{ end }}
   {{ end }}
 </nav>{{ end }}
