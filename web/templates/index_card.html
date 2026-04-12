@@ -1,8 +1,5 @@
 {{ define "index_card" }}
 <div class="w-full">
-  <header class="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center">
-    {{ template "breadcrumbs" .Breadcrumbs }}
-  </header>
   {{ if .Entries }}
   <ul class="list-none m-0 p-0">
     {{ range .Entries }}

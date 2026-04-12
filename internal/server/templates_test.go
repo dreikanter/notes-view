@@ -32,7 +32,7 @@ func TestLoadTemplates_DefinedTemplates(t *testing.T) {
 	}
 
 	// The view template should include layout and all partials.
-	for _, name := range []string{"layout", "sidebar_body", "note_pane_body", "breadcrumbs", "index_card"} {
+	for _, name := range []string{"layout", "sidebar_body", "note_pane_body", "index_card"} {
 		if ts.view.Lookup(name) == nil {
 			t.Errorf("view template set missing %q", name)
 		}
@@ -46,7 +46,7 @@ func TestParsePage(t *testing.T) {
 	}
 
 	// Should include the page plus all partials.
-	for _, name := range []string{"layout", "sidebar_body", "note_pane_body", "breadcrumbs", "index_card"} {
+	for _, name := range []string{"layout", "sidebar_body", "note_pane_body", "index_card"} {
 		if tmpl.Lookup(name) == nil {
 			t.Errorf("parsePage result missing template %q", name)
 		}
@@ -97,10 +97,6 @@ func TestRenderView(t *testing.T) {
 		ViewHref: "/view/notes/test.md",
 		IndexCard: &IndexCard{
 			Mode: "dir",
-			Breadcrumbs: BreadcrumbsData{
-				Mode:   "dir",
-				Crumbs: []Crumb{{Label: "notes", Href: "/dir/notes", Current: true}},
-			},
 			Entries: []IndexEntry{
 				{Name: "test.md", IsDir: false, Href: "/view/notes/test.md"},
 			},
@@ -218,10 +214,6 @@ func TestRenderSidebarPartial(t *testing.T) {
 	data := SidebarPartialData{
 		IndexCard: &IndexCard{
 			Mode: "dir",
-			Breadcrumbs: BreadcrumbsData{
-				Mode:   "dir",
-				Crumbs: []Crumb{{Label: "docs", Href: "/dir/docs", Current: true}},
-			},
 			Entries: []IndexEntry{
 				{Name: "readme.md", IsDir: false, Href: "/view/docs/readme.md"},
 				{Name: "subdir", IsDir: true, Href: "/view/docs/subdir/"},
@@ -240,9 +232,6 @@ func TestRenderSidebarPartial(t *testing.T) {
 	}
 	if !strings.Contains(body, "subdir") {
 		t.Error("renderSidebarPartial: expected directory entry 'subdir'")
-	}
-	if !strings.Contains(body, "docs") {
-		t.Error("renderSidebarPartial: expected breadcrumb 'docs'")
 	}
 
 	// Should NOT contain full layout elements.

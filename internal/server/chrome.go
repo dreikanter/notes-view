@@ -23,56 +23,6 @@ func tagPath(tag string) string {
 	return url.PathEscape(tag)
 }
 
-// buildDirBreadcrumbs constructs the sidebar header trail for directory
-// mode. Intermediate segments link up the directory chain via /dir/{path}.
-// The final segment is marked Current (no link).
-func buildDirBreadcrumbs(sidebarDir string) BreadcrumbsData {
-	data := BreadcrumbsData{
-		Mode: "dir",
-	}
-	sidebarDir = strings.Trim(sidebarDir, "/")
-	if sidebarDir == "" {
-		return data
-	}
-	segments := strings.Split(sidebarDir, "/")
-	accumulated := ""
-	for i, seg := range segments {
-		if accumulated == "" {
-			accumulated = seg
-		} else {
-			accumulated += "/" + seg
-		}
-		if i == len(segments)-1 {
-			data.Crumbs = append(data.Crumbs, Crumb{Label: seg, Current: true})
-			continue
-		}
-		data.Crumbs = append(data.Crumbs, Crumb{
-			Label: seg,
-			Href:  "/dir/" + viewPath(accumulated),
-		})
-	}
-	return data
-}
-
-// buildTagBreadcrumbs constructs the sidebar header trail for a single
-// tag view.
-func buildTagBreadcrumbs(tag string) BreadcrumbsData {
-	return BreadcrumbsData{
-		Mode: "tag",
-		Crumbs: []Crumb{
-			{Label: tag, Current: true},
-		},
-	}
-}
-
-// buildTagsListBreadcrumbs constructs the sidebar header trail for the
-// tags index view.
-func buildTagsListBreadcrumbs() BreadcrumbsData {
-	return BreadcrumbsData{
-		Mode: "tags",
-	}
-}
-
 // readDirEntries returns the visible entries of a notes directory as
 // IndexEntry values. Directory entries link to /dir/{path}, file entries
 // link to /view/{path}.

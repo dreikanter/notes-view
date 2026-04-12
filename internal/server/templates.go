@@ -9,17 +9,6 @@ import (
 	"github.com/dreikanter/notesview/web"
 )
 
-type Crumb struct {
-	Label   string
-	Href    string
-	Current bool
-}
-
-type BreadcrumbsData struct {
-	Mode   string // "dir", "tags", or "tag"
-	Crumbs []Crumb
-}
-
 type IndexEntry struct {
 	Name  string
 	IsDir bool
@@ -30,10 +19,9 @@ type IndexEntry struct {
 // hook for future non-directory sources (search, tag); today only "dir"
 // is populated.
 type IndexCard struct {
-	Mode        string
-	Breadcrumbs BreadcrumbsData
-	Entries     []IndexEntry
-	Empty       string
+	Mode    string
+	Entries []IndexEntry
+	Empty   string
 }
 
 // layoutFields is the common chrome passed to every full-page render.
@@ -83,7 +71,6 @@ type templateSet struct {
 
 var partials = []string{
 	"templates/layout.html",
-	"templates/breadcrumbs.html",
 	"templates/index_card.html",
 	"templates/sidebar_body.html",
 	"templates/note_pane_body.html",
@@ -115,7 +102,7 @@ func parsePage(page string) (*template.Template, error) {
 // template, so a partial response doesn't accidentally include the
 // full layout.
 func parsePartial(name string) (*template.Template, error) {
-	return template.ParseFS(web.TemplatesFS, "templates/"+name+".html", "templates/breadcrumbs.html", "templates/index_card.html")
+	return template.ParseFS(web.TemplatesFS, "templates/"+name+".html", "templates/index_card.html")
 }
 
 func (t *templateSet) renderView(w io.Writer, data ViewData) error {

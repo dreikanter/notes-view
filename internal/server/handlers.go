@@ -196,10 +196,9 @@ func (s *Server) buildDirIndex(sidebarDir string) (*IndexCard, error) {
 		return nil, err
 	}
 	return &IndexCard{
-		Mode:        "dir",
-		Breadcrumbs: buildDirBreadcrumbs(sidebarDir),
-		Entries:     entries,
-		Empty:       "No files here.",
+		Mode:    "dir",
+		Entries: entries,
+		Empty:   "No files here.",
 	}, nil
 }
 
@@ -278,7 +277,7 @@ func (s *Server) handleDir(w http.ResponseWriter, r *http.Request) {
 	card, err := s.buildDirIndex(dirPath)
 	if err != nil {
 		s.logger.Warn("sidebar build failed", "dir", dirPath, "err", err)
-		card = &IndexCard{Mode: "dir", Breadcrumbs: buildDirBreadcrumbs(dirPath), Empty: "Failed to read directory."}
+		card = &IndexCard{Mode: "dir", Empty: "Failed to read directory."}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.templates.renderSidebarPartial(w, SidebarPartialData{IndexCard: card}); err != nil {
@@ -296,10 +295,9 @@ func (s *Server) handleTags(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	card := &IndexCard{
-		Mode:        "tags",
-		Breadcrumbs: buildTagsListBreadcrumbs(),
-		Entries:     entries,
-		Empty:       "No tags found.",
+		Mode:    "tags",
+		Entries: entries,
+		Empty:   "No tags found.",
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.templates.renderSidebarPartial(w, SidebarPartialData{IndexCard: card}); err != nil {
@@ -318,10 +316,9 @@ func (s *Server) handleTagNotes(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	card := &IndexCard{
-		Mode:        "tag",
-		Breadcrumbs: buildTagBreadcrumbs(tag),
-		Entries:     entries,
-		Empty:       "No notes with this tag.",
+		Mode:    "tag",
+		Entries: entries,
+		Empty:   "No notes with this tag.",
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.templates.renderSidebarPartial(w, SidebarPartialData{IndexCard: card}); err != nil {
