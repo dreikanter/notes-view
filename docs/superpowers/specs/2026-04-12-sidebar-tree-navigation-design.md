@@ -93,7 +93,7 @@ Only one item is selected at a time.
 | `notesview.tagsOpen` | `"0"` / `"1"` | `"1"` |
 | `notesview.filesDir` | Expanded directory path (empty = root level) | `""` |
 | `notesview.tagsTag` | Expanded tag name (empty = tag list level) | `""` |
-| `notesview.selected` | Path of selected item (dir path, tag name, or note path) | `""` |
+| `notesview.selected` | Href of selected item (e.g. `/dir/2026`, `/tags/daily`, `/view/note.md`) | `""` |
 
 Remove the current `notesview.sidebarMode`, `notesview.sidebarDir`, `notesview.sidebarTag` keys.
 
@@ -129,7 +129,7 @@ Alternatively, the main panel listing can reuse the same entry list partial, wra
 - **Remove**: `breadcrumbs.html`.
 - **New**: `sidebar_tree.html` -- the two-section sidebar with FILES/TAGS roots, collapse toggles, and HTMX targets for each section's content.
 - **New**: `dir_listing.html` -- main panel template for directory/tag listings. Renders the same entry items as the sidebar but in the main content area.
-- **Refactor**: `index_card.html` -- extract the entry list (`<ul>` of entries) into a shared partial used by both sidebar sections and the main panel listing. Remove the header/breadcrumbs wrapper.
+- **New**: `entry_list.html` -- shared entry list partial used by both sidebar sections and the main panel listing.
 - **Update**: `sidebar_body.html` -- render the new two-section tree instead of the single IndexCard.
 - **Update**: `parsePartial` -- include new template files.
 

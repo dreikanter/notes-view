@@ -243,6 +243,24 @@ function restoreSidebarState() {
   restoreSectionState('tags');
 }
 
+// --- Event delegation for entry links ---
+// Uses data-action attributes instead of inline onclick handlers,
+// avoiding escaping issues with special characters in names/paths.
+
+document.addEventListener('click', function(e) {
+  var link = e.target.closest('[data-action]');
+  if (!link) return;
+  e.preventDefault();
+  var action = link.dataset.action;
+  if (action === 'selectTag') {
+    selectTag(link.dataset.entryName);
+  } else if (action === 'selectDir') {
+    selectDir(link.dataset.entryHref);
+  } else if (action === 'selectNote') {
+    selectNote(link.dataset.entryHref);
+  }
+});
+
 // --- Selection highlight after HTMX swaps ---
 
 document.body.addEventListener('htmx:afterSwap', function(e) {
