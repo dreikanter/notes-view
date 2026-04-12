@@ -45,7 +45,7 @@ func NewServer(root, editor string, logger *slog.Logger) (*Server, error) {
 		logger:    logger,
 		renderer:  renderer.NewRenderer(idx),
 		index:     idx,
-		sseHub:    NewSSEHub(root, logger),
+		sseHub:    NewSSEHub(root, logger, idx),
 		templates: tpls,
 	}, nil
 }

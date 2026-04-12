@@ -5,15 +5,18 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/dreikanter/notesview/internal/index"
 	"github.com/fsnotify/fsnotify"
 )
 
 type SSEHub struct {
 	root    string
 	logger  *slog.Logger
+	index   *index.Index
 	mu      sync.RWMutex
 	clients map[*sseClient]struct{}
 	watcher *fsnotify.Watcher
@@ -25,13 +28,14 @@ type sseClient struct {
 	events    chan string
 }
 
-func NewSSEHub(root string, logger *slog.Logger) *SSEHub {
+func NewSSEHub(root string, logger *slog.Logger, idx *index.Index) *SSEHub {
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
 	return &SSEHub{
 		root:    root,
 		logger:  logger,
+		index:   idx,
 		clients: make(map[*sseClient]struct{}),
 		done:    make(chan struct{}),
 	}
@@ -70,6 +74,9 @@ func (h *SSEHub) eventLoop() {
 			}
 			if event.Op&(fsnotify.Write|fsnotify.Create) == 0 {
 				continue
+			}
+			if event.Op&fsnotify.Create != 0 && h.index != nil {
+				h.index.Rebuild()
 			}
 			p := event.Name
 			if t, ok := timers[p]; ok {
@@ -110,7 +117,11 @@ func (h *SSEHub) addClient(c *sseClient) {
 	h.mu.Unlock()
 	if h.watcher != nil {
 		if absPath, err := SafePath(h.root, c.watchPath); err == nil {
-			h.watcher.Add(absPath)
+			// Watch the parent directory instead of the file itself.
+			// Many editors (vim, emacs, IDEs) save via write-to-temp +
+			// rename, which replaces the inode. Watching the directory
+			// ensures we see the rename/create event for the new inode.
+			h.watcher.Add(filepath.Dir(absPath))
 		}
 	}
 }
@@ -119,20 +130,27 @@ func (h *SSEHub) removeClient(c *sseClient) {
 	h.mu.Lock()
 	delete(h.clients, c)
 
-	// Remove the watched path if no remaining client needs it.
-	stillWatched := false
-	for other := range h.clients {
-		if other.watchPath == c.watchPath {
-			stillWatched = true
-			break
+	// Remove the watched directory if no remaining client needs it.
+	// We check whether any other client watches a file in the same
+	// directory, not just the exact same file.
+	var dirToRemove string
+	if h.watcher != nil {
+		if absPath, err := SafePath(h.root, c.watchPath); err == nil {
+			dirToRemove = filepath.Dir(absPath)
+			for other := range h.clients {
+				if otherAbs, err := SafePath(h.root, other.watchPath); err == nil {
+					if filepath.Dir(otherAbs) == dirToRemove {
+						dirToRemove = ""
+						break
+					}
+				}
+			}
 		}
 	}
 	h.mu.Unlock()
 
-	if !stillWatched && h.watcher != nil {
-		if absPath, err := SafePath(h.root, c.watchPath); err == nil {
-			h.watcher.Remove(absPath)
-		}
+	if dirToRemove != "" {
+		h.watcher.Remove(dirToRemove)
 	}
 }
 

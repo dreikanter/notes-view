@@ -11,6 +11,7 @@ var rootCmd = &cobra.Command{
 	Use:           "notesview",
 	Short:         "Markdown notes viewer with live preview",
 	SilenceErrors: true,
+	SilenceUsage:  true,
 }
 
 func main() {

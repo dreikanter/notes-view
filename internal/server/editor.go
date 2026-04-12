@@ -25,7 +25,11 @@ func openEditor(editorBin string, args []string) error {
 	}
 	cmd := exec.Command(editorBin, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	return cmd.Start()
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go cmd.Wait()
+	return nil
 }
 
 // openInTerminal opens a terminal editor in a new terminal window.
