@@ -54,64 +54,6 @@ func TestViewHandler(t *testing.T) {
 	}
 }
 
-// TestViewHandlerLiveReloadPreservesDir guards against the SSE
-// live-reload fetch dropping the sidebar's sticky directory. The note
-// card carries hx-get pointing at its own URL; that URL must include
-// the ?dir= suffix so file saves re-render with the sidebar state intact.
-func TestViewHandlerLiveReloadPreservesDir(t *testing.T) {
-	srv, _ := setupTestServer(t)
-	handler := srv.Routes()
-
-	req := httptest.NewRequest("GET", "/view/README.md?dir=2026", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	body := w.Body.String()
-	if !strings.Contains(body, `hx-get="/view/README.md?dir=2026"`) {
-		t.Errorf("expected hx-get to preserve ?dir=2026, got: %s", body)
-	}
-}
-
-// TestViewHandlerStickyPath covers the core sticky-model promise:
-// clicking a note from a sidebar at a non-parent directory must keep
-// the sidebar on that directory when the next page renders. Passing
-// ?dir=2026 while viewing README.md means the sidebar shows 2026/, and
-// directory entries inside it link to README.md with ?dir=2026/<subdir>.
-func TestViewHandlerStickyPath(t *testing.T) {
-	srv, _ := setupTestServer(t)
-	handler := srv.Routes()
-
-	req := httptest.NewRequest("GET", "/view/README.md?dir=2026", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
-	}
-	body := w.Body.String()
-	if !strings.Contains(body, `href="/view/README.md?dir=2026%2F03"`) {
-		t.Errorf("expected dir entry to target current note with ?dir=2026%%2F03, got: %s", body)
-	}
-}
-
-// TestViewHandlerDirSurvivesFileClicks covers the other sticky
-// direction: sibling file entries link to themselves with the current
-// ?dir= preserved, so clicking them changes the note without resetting
-// the sidebar's directory.
-func TestViewHandlerDirSurvivesFileClicks(t *testing.T) {
-	srv, _ := setupTestServer(t)
-	handler := srv.Routes()
-
-	req := httptest.NewRequest("GET", "/view/README.md?dir=2026%2F03", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	body := w.Body.String()
-	if !strings.Contains(body, `href="/view/2026/03/20260331_9201_todo.md?dir=2026%2F03"`) {
-		t.Errorf("expected file entry to preserve ?dir=2026%%2F03, got: %s", body)
-	}
-}
-
 func TestViewHandler404(t *testing.T) {
 	srv, _ := setupTestServer(t)
 	handler := srv.Routes()
@@ -133,7 +75,7 @@ func TestViewHandlerNotePanePartial(t *testing.T) {
 	srv, _ := setupTestServer(t)
 	handler := srv.Routes()
 
-	req := httptest.NewRequest("GET", "/view/2026/03/20260331_9201_todo.md?dir=2026", nil)
+	req := httptest.NewRequest("GET", "/view/2026/03/20260331_9201_todo.md", nil)
 	req.Header.Set("HX-Request", "true")
 	req.Header.Set("HX-Target", "note-pane")
 	w := httptest.NewRecorder()
@@ -151,39 +93,6 @@ func TestViewHandlerNotePanePartial(t *testing.T) {
 	}
 	if !strings.Contains(body, `id="note-card"`) {
 		t.Errorf("note-pane partial should contain the note card, got: %s", body)
-	}
-}
-
-// TestViewHandlerSidebarPartial verifies that an HX-Request with
-// HX-Target: sidebar returns just the sidebar fragment.
-func TestViewHandlerSidebarPartial(t *testing.T) {
-	srv, _ := setupTestServer(t)
-	handler := srv.Routes()
-
-	req := httptest.NewRequest("GET", "/view/2026/03/20260331_9201_todo.md?dir=2026", nil)
-	req.Header.Set("HX-Request", "true")
-	req.Header.Set("HX-Target", "sidebar")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
-	}
-	body := w.Body.String()
-	if strings.Contains(body, `id="note-card"`) {
-		t.Errorf("sidebar partial should not contain the note card, got: %s", body)
-	}
-	if strings.Contains(body, `id="topbar"`) {
-		t.Errorf("sidebar partial should not contain the topbar, got: %s", body)
-	}
-	if !strings.Contains(body, `aria-label="Root"`) {
-		t.Errorf("sidebar partial should contain breadcrumbs root link, got: %s", body)
-	}
-	// The sidebar shows 2026/, whose entries include 03/. Verify the
-	// sidebar content reflects the requested ?dir= parameter — not the
-	// note's default parent directory.
-	if !strings.Contains(body, `href="/view/2026/03/20260331_9201_todo.md?dir=2026%2F03"`) {
-		t.Errorf("sidebar partial should show 03/ subdir of requested dir=2026, got: %s", body)
 	}
 }
 
@@ -400,31 +309,6 @@ func TestShellQuote(t *testing.T) {
 		if got := shellQuote(in); got != want {
 			t.Errorf("shellQuote(%q) = %q, want %q", in, got, want)
 		}
-	}
-}
-
-// TestCleanURLWhenNoStickyDir guards against dirQuery("") emitting a
-// trailing "?dir=" on internal links. When there's no sticky directory,
-// the URL should be clean — no query string at all.
-func TestCleanURLWhenNoStickyDir(t *testing.T) {
-	srv, _ := setupTestServer(t)
-	handler := srv.Routes()
-
-	// Request the note at /view/README.md with NO ?dir= param. The sidebar
-	// defaults to the note's parent (root). The breadcrumb HOME link
-	// (HomeHref = dirLinkHref(notePath, "")) should NOT have a trailing "?dir=".
-	req := httptest.NewRequest("GET", "/view/README.md", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", w.Code)
-	}
-	body := w.Body.String()
-	// The breadcrumb home link targets the note with an empty dir, i.e.
-	// dirLinkHref("README.md", "") = "/view/README.md" (no query).
-	if strings.Contains(body, `href="/view/README.md?dir="`) {
-		t.Errorf("breadcrumb home link should be /view/README.md, not /view/README.md?dir=:\n%s", body)
 	}
 }
 

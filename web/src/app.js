@@ -42,29 +42,57 @@ function toggleSidebar() {
   } catch (e) {}
 
   if (open) {
-    // Refresh the sidebar for the current note: while hidden, the
-    // sidebar's DOM froze at its last render, but the user may have
-    // clicked wiki-links and moved to a different note.
-    window.htmx && window.htmx.ajax('GET', currentSidebarUrl(), {
-      target: '#sidebar',
-      swap: 'innerHTML',
-    });
-  } else {
-    // Closing strips ?dir= from the URL (intentional, per spec). No
-    // pushState — this is a UI preference, not a navigation event.
-    const url = new URL(window.location.href);
-    url.searchParams.delete('dir');
-    history.replaceState(null, '', url.toString());
+    refreshSidebar();
   }
 }
 
-// currentSidebarUrl builds the URL for refreshing the sidebar for the
-// current note. The note path is stashed on <body> by the layout
-// template (data-note-path) and re-stashed on #note-card for resilience
-// across note-pane swaps.
-function currentSidebarUrl() {
+// getSidebarMode returns the current sidebar mode from localStorage.
+// Defaults to 'dir' when not set.
+function getSidebarMode() {
+  try {
+    return localStorage.getItem('notesview.sidebarMode') || 'dir';
+  } catch (e) {
+    return 'dir';
+  }
+}
+
+// getSidebarTag returns the current sidebar tag from localStorage.
+function getSidebarTag() {
+  try {
+    return localStorage.getItem('notesview.sidebarTag') || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+// getSidebarDir returns the current sidebar directory from localStorage.
+// Defaults to the note's parent directory when not set.
+function getSidebarDir() {
+  try {
+    const dir = localStorage.getItem('notesview.sidebarDir');
+    if (dir !== null) return dir;
+  } catch (e) {}
+  // Fall back to the note's parent directory.
   const notePath = (document.body.dataset.notePath || '').replace(/^\/+/, '');
-  const parent = notePath ? notePath.replace(/[^/]*$/, '').replace(/\/$/, '') : '';
-  const base = notePath ? `/view/${notePath}` : '/';
-  return `${base}?dir=${encodeURIComponent(parent)}`;
+  return notePath ? notePath.replace(/[^/]*$/, '').replace(/\/$/, '') : '';
+}
+
+// refreshSidebar fetches the sidebar content based on the current
+// localStorage mode and updates the #sidebar element via HTMX.
+function refreshSidebar() {
+  const mode = getSidebarMode();
+  let url;
+  if (mode === 'tags') {
+    url = '/tags';
+  } else if (mode === 'tag') {
+    const tag = getSidebarTag();
+    url = tag ? `/tags/${encodeURIComponent(tag)}` : '/tags';
+  } else {
+    const dir = getSidebarDir();
+    url = `/dir/${dir}`;
+  }
+  window.htmx && window.htmx.ajax('GET', url, {
+    target: '#sidebar',
+    swap: 'innerHTML',
+  });
 }
