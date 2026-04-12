@@ -41,7 +41,7 @@ type ViewData struct {
 	HTML        template.HTML
 	SSEWatch    string
 	ViewHref    string
-	IndexCard   *IndexCard
+	Sidebar     SidebarPartialData
 }
 
 // NotePartialData is the render context for an HX-Target: note-pane
@@ -58,10 +58,10 @@ type NotePartialData struct {
 	EditHref    string
 }
 
-// SidebarPartialData is the render context for an HX-Target: sidebar
-// partial response. Only the fields the sidebar-body template needs.
+// SidebarPartialData is the render context for the sidebar tree.
 type SidebarPartialData struct {
-	IndexCard *IndexCard
+	Files *IndexCard // FILES section entries
+	Tags  *IndexCard // TAGS section entries
 }
 
 type templateSet struct {
@@ -74,6 +74,7 @@ var partials = []string{
 	"templates/layout.html",
 	"templates/entry_list.html",
 	"templates/index_card.html",
+	"templates/sidebar_tree.html",
 	"templates/sidebar_body.html",
 	"templates/note_pane_body.html",
 }
@@ -104,7 +105,7 @@ func parsePage(page string) (*template.Template, error) {
 // template, so a partial response doesn't accidentally include the
 // full layout.
 func parsePartial(name string) (*template.Template, error) {
-	return template.ParseFS(web.TemplatesFS, "templates/"+name+".html", "templates/entry_list.html", "templates/index_card.html")
+	return template.ParseFS(web.TemplatesFS, "templates/"+name+".html", "templates/entry_list.html", "templates/index_card.html", "templates/sidebar_tree.html")
 }
 
 func (t *templateSet) renderView(w io.Writer, data ViewData) error {
@@ -117,4 +118,8 @@ func (t *templateSet) renderNotePartial(w io.Writer, data NotePartialData) error
 
 func (t *templateSet) renderSidebarPartial(w io.Writer, data SidebarPartialData) error {
 	return t.sidebar.ExecuteTemplate(w, "sidebar_body", data)
+}
+
+func (t *templateSet) renderEntryList(w io.Writer, data *IndexCard) error {
+	return t.sidebar.ExecuteTemplate(w, "entry_list", data)
 }

@@ -62,18 +62,23 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 	// Empty state: render the two-pane layout with no note.
 	lf := s.buildLayoutFields("", "")
-	card, err := s.buildDirIndex("")
+	filesCard, err := s.buildDirIndex("")
 	if err != nil {
-		s.logger.Warn("sidebar build failed", "dir", "", "err", err)
+		s.logger.Warn("sidebar files build failed", "dir", "", "err", err)
+		filesCard = &IndexCard{Mode: "dir", Empty: "Failed to read directory."}
 	}
+	tagsCard := s.buildTagsIndex()
 	s.index.Rebuild()
 
 	view := ViewData{
 		layoutFields: lf,
 		NotePath:     "",
 		HTML:         template.HTML(`<p class="text-gray-500 text-center py-8">No note selected.</p>`),
-		IndexCard:    card,
 		ViewHref:     "/",
+		Sidebar: SidebarPartialData{
+			Files: filesCard,
+			Tags:  tagsCard,
+		},
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.templates.renderView(w, view); err != nil {
@@ -144,13 +149,16 @@ func (s *Server) handleView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Full page: build the sidebar too.
+	// Full page: build sidebar tree with both sections.
 	sidebarDir := currentDir
 	lf := s.buildLayoutFields(title, editPath)
-	card, err := s.buildDirIndex(sidebarDir)
+
+	filesCard, err := s.buildDirIndex(sidebarDir)
 	if err != nil {
-		s.logger.Warn("sidebar build failed", "dir", sidebarDir, "err", err)
+		s.logger.Warn("sidebar files build failed", "dir", sidebarDir, "err", err)
+		filesCard = &IndexCard{Mode: "dir", Empty: "Failed to read directory."}
 	}
+	tagsCard := s.buildTagsIndex()
 
 	view := ViewData{
 		layoutFields: lf,
@@ -160,7 +168,10 @@ func (s *Server) handleView(w http.ResponseWriter, r *http.Request) {
 		HTML:         template.HTML(html),
 		SSEWatch:     viewSSEWatch(reqPath),
 		ViewHref:     "/view/" + viewPath(reqPath),
-		IndexCard:    card,
+		Sidebar: SidebarPartialData{
+			Files: filesCard,
+			Tags:  tagsCard,
+		},
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -200,6 +211,24 @@ func (s *Server) buildDirIndex(sidebarDir string) (*IndexCard, error) {
 		Entries: entries,
 		Empty:   "No files here.",
 	}, nil
+}
+
+// buildTagsIndex assembles an IndexCard in tags mode from the tag index.
+func (s *Server) buildTagsIndex() *IndexCard {
+	tags := s.tagIndex.Tags()
+	entries := make([]IndexEntry, len(tags))
+	for i, tag := range tags {
+		entries[i] = IndexEntry{
+			Name:  tag,
+			IsTag: true,
+			Href:  "/tags/" + tagPath(tag),
+		}
+	}
+	return &IndexCard{
+		Mode:    "tags",
+		Entries: entries,
+		Empty:   "No tags found.",
+	}
 }
 
 // noteParentDir returns the relative directory of a note path, or "" for
@@ -280,28 +309,15 @@ func (s *Server) handleDir(w http.ResponseWriter, r *http.Request) {
 		card = &IndexCard{Mode: "dir", Empty: "Failed to read directory."}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.templates.renderSidebarPartial(w, SidebarPartialData{IndexCard: card}); err != nil {
+	if err := s.templates.renderEntryList(w, card); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
 func (s *Server) handleTags(w http.ResponseWriter, r *http.Request) {
-	tags := s.tagIndex.Tags()
-	entries := make([]IndexEntry, len(tags))
-	for i, tag := range tags {
-		entries[i] = IndexEntry{
-			Name:  tag,
-			IsTag: true,
-			Href:  "/tags/" + tagPath(tag),
-		}
-	}
-	card := &IndexCard{
-		Mode:    "tags",
-		Entries: entries,
-		Empty:   "No tags found.",
-	}
+	card := s.buildTagsIndex()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.templates.renderSidebarPartial(w, SidebarPartialData{IndexCard: card}); err != nil {
+	if err := s.templates.renderEntryList(w, card); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -322,7 +338,7 @@ func (s *Server) handleTagNotes(w http.ResponseWriter, r *http.Request) {
 		Empty:   "No notes with this tag.",
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.templates.renderSidebarPartial(w, SidebarPartialData{IndexCard: card}); err != nil {
+	if err := s.templates.renderEntryList(w, card); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
