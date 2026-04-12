@@ -25,6 +25,19 @@ func TestLoadTemplates(t *testing.T) {
 	}
 }
 
+func TestLoadTemplates_EntryListDefined(t *testing.T) {
+	ts, err := loadTemplates()
+	if err != nil {
+		t.Fatalf("loadTemplates() error: %v", err)
+	}
+	if ts.view.Lookup("entry_list") == nil {
+		t.Error("view template set missing 'entry_list'")
+	}
+	if ts.sidebar.Lookup("entry_list") == nil {
+		t.Error("sidebar template set missing 'entry_list'")
+	}
+}
+
 func TestLoadTemplates_DefinedTemplates(t *testing.T) {
 	ts, err := loadTemplates()
 	if err != nil {

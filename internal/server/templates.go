@@ -12,6 +12,7 @@ import (
 type IndexEntry struct {
 	Name  string
 	IsDir bool
+	IsTag bool
 	Href  string
 }
 
@@ -71,6 +72,7 @@ type templateSet struct {
 
 var partials = []string{
 	"templates/layout.html",
+	"templates/entry_list.html",
 	"templates/index_card.html",
 	"templates/sidebar_body.html",
 	"templates/note_pane_body.html",
@@ -102,7 +104,7 @@ func parsePage(page string) (*template.Template, error) {
 // template, so a partial response doesn't accidentally include the
 // full layout.
 func parsePartial(name string) (*template.Template, error) {
-	return template.ParseFS(web.TemplatesFS, "templates/"+name+".html", "templates/index_card.html")
+	return template.ParseFS(web.TemplatesFS, "templates/"+name+".html", "templates/entry_list.html", "templates/index_card.html")
 }
 
 func (t *templateSet) renderView(w io.Writer, data ViewData) error {

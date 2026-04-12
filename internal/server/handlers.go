@@ -290,8 +290,9 @@ func (s *Server) handleTags(w http.ResponseWriter, r *http.Request) {
 	entries := make([]IndexEntry, len(tags))
 	for i, tag := range tags {
 		entries[i] = IndexEntry{
-			Name: tag,
-			Href: "/tags/" + tagPath(tag),
+			Name:  tag,
+			IsTag: true,
+			Href:  "/tags/" + tagPath(tag),
 		}
 	}
 	card := &IndexCard{
