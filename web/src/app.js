@@ -3,7 +3,7 @@
 // Loads HTMX + SSE, runs syntax highlighting on every swap, and owns
 // the sidebar toggle and sidebar mode state (files/tags/tag).
 
-import 'htmx.org';
+import htmx from 'htmx.org';
 import 'htmx-ext-sse';
 import hljs from 'highlight.js/lib/common';
 
@@ -62,7 +62,7 @@ function refreshSidebar() {
     const dir = getSidebarDir();
     url = `/dir/${encodePath(dir)}`;
   }
-  window.htmx && window.htmx.ajax('GET', url, {
+  htmx.ajax('GET', url, {
     target: '#sidebar',
     swap: 'innerHTML',
   });
@@ -107,7 +107,7 @@ window.switchToFiles = function() {
     localStorage.setItem('notesview.sidebarMode', 'files');
     localStorage.setItem('notesview.sidebarDir', parent);
   } catch (e) {}
-  window.htmx && window.htmx.ajax('GET', `/dir/${encodePath(parent)}`, {
+  htmx.ajax('GET', `/dir/${encodePath(parent)}`, {
     target: '#sidebar',
     swap: 'innerHTML',
   });
@@ -117,7 +117,7 @@ window.switchToTags = function() {
   try {
     localStorage.setItem('notesview.sidebarMode', 'tags');
   } catch (e) {}
-  window.htmx && window.htmx.ajax('GET', '/tags', {
+  htmx.ajax('GET', '/tags', {
     target: '#sidebar',
     swap: 'innerHTML',
   });
