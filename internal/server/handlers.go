@@ -309,6 +309,16 @@ func (s *Server) handleDir(w http.ResponseWriter, r *http.Request) {
 		card = &IndexCard{Mode: "dir", Empty: "Failed to read directory."}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if hxTargetedAt(r, "note-pane") {
+		title := dirPath
+		if title == "" {
+			title = "/"
+		}
+		if err := s.templates.renderDirListing(w, DirListingData{Title: title, IndexCard: card}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
 	if err := s.templates.renderEntryList(w, card); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -317,6 +327,12 @@ func (s *Server) handleDir(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleTags(w http.ResponseWriter, r *http.Request) {
 	card := s.buildTagsIndex()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if hxTargetedAt(r, "note-pane") {
+		if err := s.templates.renderDirListing(w, DirListingData{Title: "Tags", IndexCard: card}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
 	if err := s.templates.renderEntryList(w, card); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -338,6 +354,12 @@ func (s *Server) handleTagNotes(w http.ResponseWriter, r *http.Request) {
 		Empty:   "No notes with this tag.",
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if hxTargetedAt(r, "note-pane") {
+		if err := s.templates.renderDirListing(w, DirListingData{Title: tag, IndexCard: card}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
 	if err := s.templates.renderEntryList(w, card); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}

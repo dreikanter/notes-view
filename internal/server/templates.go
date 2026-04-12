@@ -64,10 +64,18 @@ type SidebarPartialData struct {
 	Tags  *IndexCard // TAGS section entries
 }
 
+// DirListingData is the render context for the dir_listing partial,
+// used when a directory or tag listing is shown in the main panel.
+type DirListingData struct {
+	Title     string
+	IndexCard *IndexCard
+}
+
 type templateSet struct {
-	view    *template.Template
-	sidebar *template.Template
-	note    *template.Template
+	view       *template.Template
+	sidebar    *template.Template
+	note       *template.Template
+	dirListing *template.Template
 }
 
 var partials = []string{
@@ -77,6 +85,7 @@ var partials = []string{
 	"templates/sidebar_tree.html",
 	"templates/sidebar_body.html",
 	"templates/note_pane_body.html",
+	"templates/dir_listing.html",
 }
 
 func loadTemplates() (*templateSet, error) {
@@ -92,7 +101,11 @@ func loadTemplates() (*templateSet, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse note-pane partial: %w", err)
 	}
-	return &templateSet{view: view, sidebar: sidebar, note: note}, nil
+	dirListing, err := parsePartial("dir_listing")
+	if err != nil {
+		return nil, fmt.Errorf("parse dir-listing partial: %w", err)
+	}
+	return &templateSet{view: view, sidebar: sidebar, note: note, dirListing: dirListing}, nil
 }
 
 func parsePage(page string) (*template.Template, error) {
@@ -122,4 +135,8 @@ func (t *templateSet) renderSidebarPartial(w io.Writer, data SidebarPartialData)
 
 func (t *templateSet) renderEntryList(w io.Writer, data *IndexCard) error {
 	return t.sidebar.ExecuteTemplate(w, "entry_list", data)
+}
+
+func (t *templateSet) renderDirListing(w io.Writer, data DirListingData) error {
+	return t.dirListing.ExecuteTemplate(w, "dir_listing", data)
 }
