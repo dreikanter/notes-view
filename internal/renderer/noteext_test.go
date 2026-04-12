@@ -3,7 +3,6 @@ package renderer
 import (
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -19,15 +18,10 @@ func TestWikiLinkResolved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(html, `href="/view/2026/03/20260331_9201_todo.md"`) {
-		t.Errorf("[[UID]] not resolved:\n%s", html)
-	}
-	if !strings.Contains(html, `class="uid-link"`) {
-		t.Errorf("[[UID]] missing uid-link class:\n%s", html)
-	}
-	if !strings.Contains(html, `hx-boost="true"`) {
-		t.Errorf("[[UID]] missing hx-boost:\n%s", html)
-	}
+	a := findAnchor(t, html, "href", "/view/2026/03/20260331_9201_todo.md")
+	assertAttr(t, a, "class", "uid-link")
+	assertAttr(t, a, "hx-boost", "true")
+	assertAttr(t, a, "hx-target", "#note-pane")
 }
 
 // TestWikiLinkUnresolved verifies that [[UID]] with a non-existent
@@ -72,9 +66,7 @@ func TestWikiLinkDirQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(html, `href="/view/2026/03/20260331_9201_todo.md?dir=2026%2F03"`) {
-		t.Errorf("[[UID]] link dropped dirQuery:\n%s", html)
-	}
+	findAnchor(t, html, "href", "/view/2026/03/20260331_9201_todo.md?dir=2026%2F03")
 }
 
 func setupTestIndex(t *testing.T) *index.Index {
@@ -101,10 +93,9 @@ func TestNoteProtocolLink(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := `<a href="/view/2026/03/20260331_9201_todo.md" hx-boost="true" hx-target="#note-pane"`
-	if !strings.Contains(html, expected) {
-		t.Errorf("note:// link missing expected anchor shape %q:\n%s", expected, html)
-	}
+	a := findAnchor(t, html, "href", "/view/2026/03/20260331_9201_todo.md")
+	assertAttr(t, a, "hx-boost", "true")
+	assertAttr(t, a, "hx-target", "#note-pane")
 }
 
 func TestBrokenNoteLink(t *testing.T) {
@@ -114,20 +105,10 @@ func TestBrokenNoteLink(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(html, `class="broken-link"`) {
-		t.Errorf("broken note:// link not marked:\n%s", html)
-	}
-	if !strings.Contains(html, `href="#"`) {
-		t.Errorf("broken link should href=\"#\":\n%s", html)
-	}
-	brokenRe := regexp.MustCompile(`<a [^>]*class="broken-link"[^>]*>`)
-	match := brokenRe.FindString(html)
-	if match == "" {
-		t.Errorf("broken-link anchor not found:\n%s", html)
-	}
-	if strings.Contains(match, "hx-boost") {
-		t.Errorf("broken-link anchor should not have hx-boost, got tag: %s", match)
-	}
+	a := findAnchor(t, html, "class", "broken-link")
+	assertAttr(t, a, "href", "#")
+	assertNoAttr(t, a, "hx-boost")
+	assertNoAttr(t, a, "hx-target")
 }
 
 func TestRelativeMdLink(t *testing.T) {
@@ -137,10 +118,9 @@ func TestRelativeMdLink(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := `<a href="/view/2026/01/foo.md" hx-boost="true" hx-target="#note-pane"`
-	if !strings.Contains(html, expected) {
-		t.Errorf("relative .md link missing expected anchor shape %q:\n%s", expected, html)
-	}
+	a := findAnchor(t, html, "href", "/view/2026/01/foo.md")
+	assertAttr(t, a, "hx-boost", "true")
+	assertAttr(t, a, "hx-target", "#note-pane")
 }
 
 // TestExternalLinksStayPlain pins the "external links are plain HTML"
@@ -154,16 +134,10 @@ func TestExternalLinksStayPlain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, href := range []string{`href="https://example.com"`, `href="mailto:a@b.com"`, `href="/static/foo.png"`} {
-		if !strings.Contains(html, href) {
-			t.Errorf("expected %s in output:\n%s", href, html)
-		}
-	}
-	// Sanity-check: none of the external-link anchors carry hx-* attrs.
-	if strings.Contains(html, `href="https://example.com" hx-boost`) ||
-		strings.Contains(html, `href="mailto:a@b.com" hx-boost`) ||
-		strings.Contains(html, `href="/static/foo.png" hx-boost`) {
-		t.Errorf("external link picked up hx-boost:\n%s", html)
+	for _, href := range []string{"https://example.com", "mailto:a@b.com", "/static/foo.png"} {
+		a := findAnchor(t, html, "href", href)
+		assertNoAttr(t, a, "hx-boost")
+		assertNoAttr(t, a, "hx-target")
 	}
 }
 
@@ -207,13 +181,8 @@ func TestDirQueryThreading(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(html, `href="/view/2026/03/20260331_9201_todo.md?dir=2026%2F03"`) {
-		t.Errorf("note:// link dropped dirQuery:\n%s", html)
-	}
-	if !strings.Contains(html, `href="/view/2026/03/20260330_9198.md?dir=2026%2F03"`) {
-		t.Errorf("relative .md link dropped dirQuery:\n%s", html)
-	}
-	if !strings.Contains(html, `href="/view/2026/03/20260331_9201_todo.md?dir=2026%2F03" class="uid-link"`) {
-		t.Errorf("[[UID]] wiki-link dropped dirQuery:\n%s", html)
-	}
+	findAnchor(t, html, "href", "/view/2026/03/20260331_9201_todo.md?dir=2026%2F03")
+	findAnchor(t, html, "href", "/view/2026/03/20260330_9198.md?dir=2026%2F03")
+	a := findAnchor(t, html, "class", "uid-link")
+	assertAttr(t, a, "href", "/view/2026/03/20260331_9201_todo.md?dir=2026%2F03")
 }

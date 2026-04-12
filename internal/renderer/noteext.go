@@ -219,10 +219,6 @@ func (r *noteLinkRenderer) renderLink(w util.BufWriter, source []byte, node ast.
 		}
 		_ = w.WriteByte('"')
 
-		// Emit class (if any) before HTMX attrs so tests that check
-		// for "href=... class=..." adjacency match regardless of
-		// whether hx-* is present. Broken-link anchors also benefit:
-		// their class="broken-link" and title="" show up together.
 		if v, ok := n.AttributeString("class"); ok {
 			if b, ok := v.([]byte); ok {
 				_, _ = w.WriteString(` class="`)
@@ -230,7 +226,6 @@ func (r *noteLinkRenderer) renderLink(w util.BufWriter, source []byte, node ast.
 				_ = w.WriteByte('"')
 			}
 		}
-
 		if isInternalLink(n.Destination) {
 			_, _ = w.WriteString(` hx-boost="true" hx-target="#note-pane"`)
 		}
