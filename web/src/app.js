@@ -1,8 +1,7 @@
 // notesview front-end bootstrap.
 //
 // Loads HTMX + SSE, runs syntax highlighting on every swap, and owns
-// the sidebar toggle (client-side visibility with localStorage +
-// on-open sidebar refresh).
+// the sidebar toggle and sidebar mode state (files/tags/tag).
 
 import 'htmx.org';
 import 'htmx-ext-sse';
@@ -18,11 +17,14 @@ function highlightIn(root) {
 document.addEventListener('DOMContentLoaded', function () {
   highlightIn(document);
   wireSidebarToggle();
+  restoreSidebarState();
 });
 
 document.body.addEventListener('htmx:afterSwap', function (e) {
   highlightIn(e.target);
 });
+
+// --- Sidebar toggle ---
 
 function wireSidebarToggle() {
   const btn = document.getElementById('sidebar-toggle');
@@ -46,39 +48,8 @@ function toggleSidebar() {
   }
 }
 
-// getSidebarMode returns the current sidebar mode from localStorage.
-// Defaults to 'dir' when not set.
-function getSidebarMode() {
-  try {
-    return localStorage.getItem('notesview.sidebarMode') || 'dir';
-  } catch (e) {
-    return 'dir';
-  }
-}
+// --- Sidebar mode state ---
 
-// getSidebarTag returns the current sidebar tag from localStorage.
-function getSidebarTag() {
-  try {
-    return localStorage.getItem('notesview.sidebarTag') || '';
-  } catch (e) {
-    return '';
-  }
-}
-
-// getSidebarDir returns the current sidebar directory from localStorage.
-// Defaults to the note's parent directory when not set.
-function getSidebarDir() {
-  try {
-    const dir = localStorage.getItem('notesview.sidebarDir');
-    if (dir !== null) return dir;
-  } catch (e) {}
-  // Fall back to the note's parent directory.
-  const notePath = (document.body.dataset.notePath || '').replace(/^\/+/, '');
-  return notePath ? notePath.replace(/[^/]*$/, '').replace(/\/$/, '') : '';
-}
-
-// refreshSidebar fetches the sidebar content based on the current
-// localStorage mode and updates the #sidebar element via HTMX.
 function refreshSidebar() {
   const mode = getSidebarMode();
   let url;
@@ -96,3 +67,67 @@ function refreshSidebar() {
     swap: 'innerHTML',
   });
 }
+
+function restoreSidebarState() {
+  const mode = getSidebarMode();
+  if (mode === 'files') return; // Server already rendered files mode
+  refreshSidebar();
+}
+
+function getSidebarMode() {
+  try { return localStorage.getItem('notesview.sidebarMode') || 'files'; } catch (e) { return 'files'; }
+}
+
+function getSidebarTag() {
+  try { return localStorage.getItem('notesview.sidebarTag') || ''; } catch (e) { return ''; }
+}
+
+function getSidebarDir() {
+  try { return localStorage.getItem('notesview.sidebarDir') || ''; } catch (e) { return ''; }
+}
+
+// Global functions called from template onclick handlers.
+// These update localStorage before HTMX fires the request.
+
+// switchToFiles navigates the sidebar to the current note's parent dir.
+// Called by the Files button in the breadcrumb toggle. Uses JS to compute
+// the URL dynamically (the note path isn't known at template render time
+// when the sidebar is in tags mode).
+window.switchToFiles = function() {
+  const notePath = document.querySelector('#note-card')?.dataset?.notePath || '';
+  const parent = notePath ? notePath.replace(/[^/]*$/, '').replace(/\/$/, '') : '';
+  try {
+    localStorage.setItem('notesview.sidebarMode', 'files');
+    localStorage.setItem('notesview.sidebarDir', parent);
+  } catch (e) {}
+  window.htmx && window.htmx.ajax('GET', `/dir/${encodeURIComponent(parent)}`, {
+    target: '#sidebar',
+    swap: 'innerHTML',
+  });
+};
+
+window.switchToTags = function() {
+  try {
+    localStorage.setItem('notesview.sidebarMode', 'tags');
+  } catch (e) {}
+  window.htmx && window.htmx.ajax('GET', '/tags', {
+    target: '#sidebar',
+    swap: 'innerHTML',
+  });
+};
+
+window.setSidebarTag = function(tag) {
+  try {
+    localStorage.setItem('notesview.sidebarMode', 'tag');
+    localStorage.setItem('notesview.sidebarTag', tag);
+  } catch (e) {}
+};
+
+window.setSidebarDir = function(href) {
+  try {
+    // Extract dir path from /dir/... href
+    const dir = href.replace(/^\/dir\//, '');
+    localStorage.setItem('notesview.sidebarMode', 'files');
+    localStorage.setItem('notesview.sidebarDir', decodeURIComponent(dir));
+  } catch (e) {}
+};
