@@ -229,41 +229,6 @@ func (s *Server) buildTagsIndex() *IndexCard {
 	}
 }
 
-// buildTagTree builds the tags sidebar tree. All tags appear at depth 0.
-// If expandedTag is non-empty, that tag is marked expanded and its notes
-// appear at depth 1 below it.
-func (s *Server) buildTagTree(expandedTag string) *IndexCard {
-	tags := s.tagIndex.Tags()
-	var entries []IndexEntry
-	for _, tag := range tags {
-		e := IndexEntry{
-			Name:  tag,
-			IsTag: true,
-			Href:  "/tags/" + tagPath(tag),
-			Depth: 0,
-		}
-		if tag == expandedTag {
-			e.Expanded = true
-			entries = append(entries, e)
-			// Add this tag's notes as children
-			notes := s.tagIndex.NotesByTag(tag)
-			for _, notePath := range notes {
-				entries = append(entries, IndexEntry{
-					Name:  notePath,
-					Href:  "/view/" + viewPath(notePath),
-					Depth: 1,
-				})
-			}
-		} else {
-			entries = append(entries, e)
-		}
-	}
-	return &IndexCard{
-		Entries: entries,
-		Empty:   "No tags found.",
-	}
-}
-
 // noteParentDir returns the relative directory of a note path, or "" for
 // notes at the root.
 func noteParentDir(notePath string) string {
@@ -452,6 +417,8 @@ func (s *Server) handleTagNotes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	// HTMX partial: note-pane listing of tagged notes.
 	if hxTargetedAt(r, "note-pane") {
 		if err := s.templates.renderDirListing(w, DirListingData{Title: tag, IndexCard: card}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -459,26 +426,18 @@ func (s *Server) handleTagNotes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sidebar partial: tag tree with this tag expanded
-	tagTree := s.buildTagTree(tag)
-	if r.Header.Get("HX-Request") == "true" {
-		if err := s.templates.renderEntryList(w, tagTree); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		return
-	}
-
-	// Full-page load
+	// Full-page load (direct URL visit / reload).
 	filesCard, _ := s.buildDirIndex("")
 	if filesCard == nil {
 		filesCard = &IndexCard{Empty: "No files here."}
 	}
+	tagsCard := s.buildTagsIndex()
 	view := ViewData{
 		layoutFields: s.buildLayoutFields(tag, ""),
 		ViewHref:     "/tags/" + tagPath(tag),
 		Sidebar: SidebarPartialData{
 			Files: filesCard,
-			Tags:  tagTree,
+			Tags:  tagsCard,
 		},
 		DirListing: &DirListingData{Title: tag, IndexCard: card},
 	}

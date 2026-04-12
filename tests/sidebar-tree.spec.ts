@@ -121,16 +121,20 @@ test.describe('Sidebar Tree Navigation', () => {
     await expect(listing).toContainText('day-two.md');
   });
 
-  test('clicking a tag expands it in sidebar', async ({ page }) => {
+  test('clicking a tag keeps sidebar tags list unchanged', async ({ page }) => {
     await page.goto('/view/README.md');
     await page.click('#sidebar-toggle');
 
     // Click the "daily" tag
     await page.locator('#tags-content a', { hasText: 'daily' }).click();
+    await page.locator('#dir-listing').waitFor();
 
-    // Sidebar tags section should now show the tag's notes
+    // Sidebar tags section should still show the flat tag list (no expansion)
     const tagsContent = page.locator('#tags-content');
-    await expect(tagsContent.locator('a', { hasText: 'day-one.md' })).toBeVisible();
+    await expect(tagsContent.locator('a', { hasText: 'daily' })).toBeVisible();
+    await expect(tagsContent.locator('a', { hasText: 'intro' })).toBeVisible();
+    // Tag's notes should NOT appear in the sidebar
+    await expect(tagsContent.locator('a', { hasText: 'day-one.md' })).not.toBeVisible();
   });
 
   test('section collapse/expand toggles visibility', async ({ page }) => {
@@ -203,20 +207,22 @@ test.describe('Sidebar Tree Navigation', () => {
     await expect(filesContent.locator('a', { hasText: 'README.md' })).toBeVisible();
   });
 
-  test('tag tree shows all tags with selected tag expanded', async ({ page }) => {
+  test('clicking a tag shows notes in main panel only', async ({ page }) => {
     await page.goto('/view/README.md');
     await page.click('#sidebar-toggle');
 
     // Click the "daily" tag
     await page.locator('#tags-content a', { hasText: 'daily' }).click();
 
-    // Sidebar should show "daily" expanded with its notes,
-    // AND other tags still visible
+    // Main panel should show tagged notes
+    const listing = page.locator('#dir-listing');
+    await expect(listing).toBeVisible();
+    await expect(listing.locator('a', { hasText: 'day-one.md' })).toBeVisible();
+
+    // Sidebar tags section stays flat — no expansion
     const tagsContent = page.locator('#tags-content');
     await expect(tagsContent.locator('a', { hasText: 'daily' })).toBeVisible();
-    await expect(tagsContent.locator('a', { hasText: 'day-one.md' })).toBeVisible();
-    // Other tags should still be visible
-    await expect(tagsContent.locator('a', { hasText: 'intro' })).toBeVisible();
+    await expect(tagsContent.locator('a', { hasText: 'day-one.md' })).not.toBeVisible();
   });
 
   test('URL updates when navigating to a note', async ({ page }) => {

@@ -143,20 +143,14 @@ window.selectTag = function(tag, skipPush) {
   // Push browser URL
   if (!skipPush) history.pushState({ type: 'tag', tag: tag, href: href }, '', href);
 
-  // Load listing in main panel
+  // Load tagged notes in main panel only — sidebar stays as flat tag list
   htmx.ajax('GET', href, {
     target: '#note-pane',
     swap: 'innerHTML',
     headers: { 'HX-Target': 'note-pane' },
   });
 
-  // Load tree in sidebar tags section
-  htmx.ajax('GET', href, {
-    target: '#tags-content',
-    swap: 'innerHTML',
-  });
-
-  // Ensure tags section is visible
+  // Ensure tags section is visible and highlight the selected tag
   var content = document.getElementById('tags-content');
   var disclosure = document.getElementById('tags-disclosure');
   if (content) content.style.display = '';

@@ -475,25 +475,3 @@ func TestTagNotesHandlerUnknownTag(t *testing.T) {
 	}
 }
 
-func TestTagNotesHandlerUnknownTag_Sidebar(t *testing.T) {
-	srv, _ := setupTestServer(t)
-	handler := srv.Routes()
-
-	// The sidebar response for an unknown tag shows the full tag tree
-	// (the unknown tag has no children, so it appears unexpanded among
-	// the other tags).
-	req := httptest.NewRequest("GET", "/tags/nonexistent", nil)
-	req.Header.Set("HX-Request", "true")
-	req.Header.Set("HX-Target", "sidebar")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
-	}
-	body := w.Body.String()
-	// Should still contain the known tags
-	if !strings.Contains(body, "todo") || !strings.Contains(body, "daily") {
-		t.Errorf("expected known tags in sidebar tree, got: %s", body)
-	}
-}
