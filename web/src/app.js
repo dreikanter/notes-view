@@ -15,9 +15,37 @@ function highlightIn(root) {
   });
 }
 
+// Synthesize a short click sound using the Web Audio API.
+// A ~25ms square-wave burst gives a mechanical ratchet feel.
+let audioCtx = null;
+
+function playClick() {
+  if (!audioCtx) {
+    audioCtx = new AudioContext();
+  }
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'square';
+  osc.frequency.value = 1200;
+  gain.gain.value = 0.03;
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  const now = audioCtx.currentTime;
+  osc.start(now);
+  osc.stop(now + 0.025);
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   highlightIn(document);
   wireSidebarToggle();
+
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar) {
+    sidebar.addEventListener('mouseenter', function (e) {
+      const link = e.target.closest('#sidebar a');
+      if (link) playClick();
+    }, true);
+  }
 });
 
 document.body.addEventListener('htmx:afterSwap', function (e) {
