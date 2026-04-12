@@ -64,9 +64,12 @@ function encodePath(p) {
 window.toggleSection = function(name) {
   var content = document.getElementById(name + '-content');
   var disclosure = document.getElementById(name + '-disclosure');
+  var btn = document.querySelector('[aria-controls="' + name + '-content"]');
   if (!content) return;
   var isOpen = content.style.display !== 'none';
   content.style.display = isOpen ? 'none' : '';
+  content.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
+  if (btn) btn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
   if (disclosure) disclosure.textContent = isOpen ? '\u25B8' : '\u25BE';
   setLS(name + 'Open', isOpen ? '0' : '1');
 };
@@ -75,9 +78,12 @@ function restoreSectionState(name) {
   var open = getLS(name + 'Open', '1');
   var content = document.getElementById(name + '-content');
   var disclosure = document.getElementById(name + '-disclosure');
+  var btn = document.querySelector('[aria-controls="' + name + '-content"]');
   if (!content) return;
   if (open === '0') {
     content.style.display = 'none';
+    content.setAttribute('aria-hidden', 'true');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
     if (disclosure) disclosure.textContent = '\u25B8';
   }
 }
