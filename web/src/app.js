@@ -96,18 +96,14 @@ function encodePath(p) {
 // Global functions called from template onclick handlers.
 // These update localStorage before HTMX fires the request.
 
-// switchToFiles navigates the sidebar to the current note's parent dir.
-// Called by the Files button in the breadcrumb toggle. Uses JS to compute
-// the URL dynamically (the note path isn't known at template render time
-// when the sidebar is in tags mode).
+// switchToFiles navigates the sidebar to the root directory.
+// The breadcrumb trail handles navigation within the directory tree.
 window.switchToFiles = function() {
-  const notePath = document.querySelector('#note-card')?.dataset?.notePath || '';
-  const parent = notePath ? notePath.replace(/[^/]*$/, '').replace(/\/$/, '') : '';
   try {
     localStorage.setItem('notesview.sidebarMode', 'files');
-    localStorage.setItem('notesview.sidebarDir', parent);
+    localStorage.setItem('notesview.sidebarDir', '');
   } catch (e) {}
-  htmx.ajax('GET', `/dir/${encodePath(parent)}`, {
+  htmx.ajax('GET', '/dir/', {
     target: '#sidebar',
     swap: 'innerHTML',
   });

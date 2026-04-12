@@ -147,6 +147,28 @@ tags: [go]
 	}
 }
 
+func TestTagIndexQuotedTags(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "inline.md"), "---\ntags: [\"bash\", 'golang', plain]\n---\n")
+	writeFile(t, filepath.Join(dir, "block.md"), "---\ntags:\n  - \"docker\"\n  - 'k8s'\n---\n")
+
+	idx := NewTagIndex(dir, nil)
+	if err := idx.Build(); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	tags := idx.Tags()
+	want := []string{"bash", "docker", "golang", "k8s", "plain"}
+	if len(tags) != len(want) {
+		t.Fatalf("Tags() = %v, want %v", tags, want)
+	}
+	for i, tag := range tags {
+		if tag != want[i] {
+			t.Errorf("Tags()[%d] = %q, want %q", i, tag, want[i])
+		}
+	}
+}
+
 func TestTagIndexBlockListFormat(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "note_block.md"), `---

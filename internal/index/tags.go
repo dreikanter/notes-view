@@ -168,7 +168,7 @@ func parseFrontmatterTags(path string) []string {
 			// A block list item starts with optional whitespace then "- ".
 			trimmed := strings.TrimSpace(line)
 			if strings.HasPrefix(trimmed, "- ") {
-				tag := strings.TrimSpace(trimmed[2:])
+				tag := stripYAMLQuotes(strings.TrimSpace(trimmed[2:]))
 				if tag != "" {
 					tags = append(tags, tag)
 				}
@@ -191,11 +191,12 @@ func parseFrontmatterTags(path string) []string {
 			continue
 		}
 
-		// Inline format: tags: [a, b, c]
+		// Inline format: tags: [a, b, c] or tags: ["a", "b", 'c']
 		if strings.HasPrefix(rest, "[") && strings.HasSuffix(rest, "]") {
 			inner := rest[1 : len(rest)-1]
 			for _, part := range strings.Split(inner, ",") {
 				tag := strings.TrimSpace(part)
+				tag = stripYAMLQuotes(tag)
 				if tag != "" {
 					tags = append(tags, tag)
 				}
@@ -204,4 +205,15 @@ func parseFrontmatterTags(path string) []string {
 	}
 
 	return tags
+}
+
+// stripYAMLQuotes removes surrounding single or double quotes from a
+// YAML scalar value, e.g. `"bash"` → `bash`, `'go'` → `go`.
+func stripYAMLQuotes(s string) string {
+	if len(s) >= 2 {
+		if (s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
 }
