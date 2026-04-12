@@ -8,8 +8,9 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "notesview",
-	Short: "Markdown notes viewer with live preview",
+	Use:           "notesview",
+	Short:         "Markdown notes viewer with live preview",
+	SilenceErrors: true,
 }
 
 func main() {

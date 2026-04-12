@@ -34,7 +34,7 @@ func (s *Server) buildLayoutFields(title, editPath, effectiveDir string) layoutF
 		DirQuery: dirQuery(effectiveDir),
 	}
 	if editPath != "" {
-		lf.EditHref = "/api/edit/" + editPath
+		lf.EditHref = "/api/edit/" + viewPath(editPath)
 	}
 	return lf
 }
@@ -160,7 +160,7 @@ func (s *Server) handleView(w http.ResponseWriter, r *http.Request) {
 	editHref := ""
 	if s.editor != "" {
 		editPath = reqPath
-		editHref = "/api/edit/" + reqPath
+		editHref = "/api/edit/" + viewPath(reqPath)
 	}
 
 	// Note-pane partial response: return only the note body, no chrome.
@@ -171,7 +171,7 @@ func (s *Server) handleView(w http.ResponseWriter, r *http.Request) {
 			Frontmatter: fm,
 			HTML:        template.HTML(html),
 			SSEWatch:    viewSSEWatch(reqPath),
-			ViewHref:    "/view/" + reqPath + dq,
+			ViewHref:    "/view/" + viewPath(reqPath) + dq,
 			DirQuery:    dq,
 			EditPath:    editPath,
 			EditHref:    editHref,
@@ -197,7 +197,7 @@ func (s *Server) handleView(w http.ResponseWriter, r *http.Request) {
 		Frontmatter:  fm,
 		HTML:         template.HTML(html),
 		SSEWatch:     viewSSEWatch(reqPath),
-		ViewHref:     "/view/" + reqPath + dq,
+		ViewHref:     "/view/" + viewPath(reqPath) + dq,
 		IndexCard:    card,
 	}
 

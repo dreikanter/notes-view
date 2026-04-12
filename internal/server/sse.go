@@ -108,8 +108,10 @@ func (h *SSEHub) addClient(c *sseClient) {
 	h.mu.Lock()
 	h.clients[c] = struct{}{}
 	h.mu.Unlock()
-	if absPath, err := SafePath(h.root, c.watchPath); err == nil {
-		h.watcher.Add(absPath)
+	if h.watcher != nil {
+		if absPath, err := SafePath(h.root, c.watchPath); err == nil {
+			h.watcher.Add(absPath)
+		}
 	}
 }
 
@@ -127,7 +129,7 @@ func (h *SSEHub) removeClient(c *sseClient) {
 	}
 	h.mu.Unlock()
 
-	if !stillWatched {
+	if !stillWatched && h.watcher != nil {
 		if absPath, err := SafePath(h.root, c.watchPath); err == nil {
 			h.watcher.Remove(absPath)
 		}
@@ -144,6 +146,10 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	watchPath := r.URL.Query().Get("watch")
 	if watchPath == "" {
 		http.Error(w, "watch parameter required", http.StatusBadRequest)
+		return
+	}
+	if _, err := SafePath(s.root, watchPath); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 

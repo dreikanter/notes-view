@@ -8,6 +8,16 @@ import (
 	"strings"
 )
 
+// viewPath percent-encodes each segment of a relative file/dir path for
+// use in /view/ URLs, so names with spaces, #, ? etc. produce valid hrefs.
+func viewPath(relPath string) string {
+	segments := strings.Split(relPath, "/")
+	for i, s := range segments {
+		segments[i] = url.PathEscape(s)
+	}
+	return strings.Join(segments, "/")
+}
+
 // dirQuery formats the canonical query suffix that carries the sidebar's
 // sticky directory across links. Empty string means "no sticky directory"
 // (the URL has no ?dir= at all). When non-empty the path is always
@@ -29,13 +39,13 @@ func dirLinkHref(notePath, newDir string) string {
 	if notePath == "" {
 		return "/" + q
 	}
-	return "/view/" + notePath + q
+	return "/view/" + viewPath(notePath) + q
 }
 
 // fileLinkHref builds an href that changes the note while keeping the
 // sidebar on the same directory. The other half of the sticky model.
 func fileLinkHref(filePath, sidebarDir string) string {
-	return "/view/" + filePath + dirQuery(sidebarDir)
+	return "/view/" + viewPath(filePath) + dirQuery(sidebarDir)
 }
 
 // buildBreadcrumbs constructs the sidebar header trail. Intermediate
