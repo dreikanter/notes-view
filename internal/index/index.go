@@ -2,7 +2,6 @@ package index
 
 import (
 	"errors"
-	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -10,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/dreikanter/notesview/internal/logging"
 )
 
 var uidPattern = regexp.MustCompile(`^(\d{8}_\d+)`)
@@ -30,7 +31,7 @@ type Index struct {
 
 func New(root string, logger *slog.Logger) *Index {
 	if logger == nil {
-		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+		logger = logging.Discard()
 	}
 	return &Index{
 		root:   root,
