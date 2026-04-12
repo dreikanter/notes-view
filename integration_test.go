@@ -32,28 +32,29 @@ func TestIntegrationSmoke(t *testing.T) {
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
-	resp, err := client.Get(ts.URL + "/")
+	rootResp, err := client.Get(ts.URL + "/")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.StatusCode != http.StatusFound {
-		t.Errorf("root: status = %d, want 302", resp.StatusCode)
+	rootResp.Body.Close()
+	if rootResp.StatusCode != http.StatusFound {
+		t.Errorf("root: status = %d, want 302", rootResp.StatusCode)
 	}
 
 	// Test: view a file renders HTML
-	resp, err = http.Get(ts.URL + "/view/2026/03/20260331_9201_todo.md")
+	viewResp, err := http.Get(ts.URL + "/view/2026/03/20260331_9201_todo.md")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("view: status = %d, body: %s", resp.StatusCode, body)
+	defer viewResp.Body.Close()
+	if viewResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(viewResp.Body)
+		t.Fatalf("view: status = %d, body: %s", viewResp.StatusCode, body)
 	}
-	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+	if ct := viewResp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
 		t.Errorf("view: content-type = %q, want text/html", ct)
 	}
-	body, _ := io.ReadAll(resp.Body)
+	body, _ := io.ReadAll(viewResp.Body)
 	bodyStr := string(body)
 	if !strings.Contains(bodyStr, "Daily Todo") {
 		t.Errorf("view: expected title 'Daily Todo' in body")
@@ -65,18 +66,17 @@ func TestIntegrationSmoke(t *testing.T) {
 	// Test: /view/README.md?dir=2026 renders a two-pane view with the
 	// sidebar showing 2026/. Dir entries in the sidebar preserve the
 	// note (README.md) and advance the dir.
-	resp, err = http.Get(ts.URL + "/view/README.md?dir=2026")
+	dirResp, err := http.Get(ts.URL + "/view/README.md?dir=2026")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.StatusCode != http.StatusOK {
-		viewErrBody, _ := io.ReadAll(resp.Body)
-		t.Errorf("/view/README.md?dir=2026: status = %d, body: %s", resp.StatusCode, viewErrBody)
-	}
-	viewBody, err := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	viewBody, err := io.ReadAll(dirResp.Body)
+	dirResp.Body.Close()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if dirResp.StatusCode != http.StatusOK {
+		t.Errorf("/view/README.md?dir=2026: status = %d, body: %s", dirResp.StatusCode, viewBody)
 	}
 	// Sidebar region must be present.
 	if !strings.Contains(string(viewBody), `id="sidebar"`) {
@@ -89,23 +89,23 @@ func TestIntegrationSmoke(t *testing.T) {
 	}
 
 	// Test: raw endpoint
-	resp, err = http.Get(ts.URL + "/api/raw/README.md")
+	rawResp, err := http.Get(ts.URL + "/api/raw/README.md")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
+	raw, _ := io.ReadAll(rawResp.Body)
+	rawResp.Body.Close()
 	if string(raw) != "# Welcome\n\nHello world.\n" {
 		t.Errorf("raw = %q", raw)
 	}
 
 	// Test: 404
-	resp, err = http.Get(ts.URL + "/view/nonexistent.md")
+	notFoundResp, err := http.Get(ts.URL + "/view/nonexistent.md")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("404: status = %d", resp.StatusCode)
+	notFoundResp.Body.Close()
+	if notFoundResp.StatusCode != http.StatusNotFound {
+		t.Errorf("404: status = %d", notFoundResp.StatusCode)
 	}
 }

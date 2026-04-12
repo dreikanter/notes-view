@@ -3,15 +3,20 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/dreikanter/notesview/internal/index"
 	"github.com/fsnotify/fsnotify"
 )
 
 type SSEHub struct {
 	root    string
+	logger  *slog.Logger
+	index   *index.Index
 	mu      sync.RWMutex
 	clients map[*sseClient]struct{}
 	watcher *fsnotify.Watcher
@@ -23,9 +28,14 @@ type sseClient struct {
 	events    chan string
 }
 
-func NewSSEHub(root string) *SSEHub {
+func NewSSEHub(root string, logger *slog.Logger, idx *index.Index) *SSEHub {
+	if logger == nil {
+		logger = slog.New(slog.DiscardHandler)
+	}
 	return &SSEHub{
 		root:    root,
+		logger:  logger,
+		index:   idx,
 		clients: make(map[*sseClient]struct{}),
 		done:    make(chan struct{}),
 	}
@@ -49,12 +59,14 @@ func (h *SSEHub) Stop() {
 }
 
 func (h *SSEHub) eventLoop() {
-	var debounce *time.Timer
-	var lastPath string
+	timers := make(map[string]*time.Timer)
 
 	for {
 		select {
 		case <-h.done:
+			for _, t := range timers {
+				t.Stop()
+			}
 			return
 		case event, ok := <-h.watcher.Events:
 			if !ok {
@@ -63,17 +75,21 @@ func (h *SSEHub) eventLoop() {
 			if event.Op&(fsnotify.Write|fsnotify.Create) == 0 {
 				continue
 			}
-			lastPath = event.Name
-			if debounce != nil {
-				debounce.Stop()
+			if event.Op&fsnotify.Create != 0 && h.index != nil {
+				h.index.Rebuild()
 			}
-			debounce = time.AfterFunc(100*time.Millisecond, func() {
-				h.broadcast(lastPath)
+			p := event.Name
+			if t, ok := timers[p]; ok {
+				t.Stop()
+			}
+			timers[p] = time.AfterFunc(100*time.Millisecond, func() {
+				h.broadcast(p)
 			})
-		case _, ok := <-h.watcher.Errors:
+		case err, ok := <-h.watcher.Errors:
 			if !ok {
 				return
 			}
+			h.logger.Warn("file watcher error", "err", err)
 		}
 	}
 }
@@ -99,15 +115,43 @@ func (h *SSEHub) addClient(c *sseClient) {
 	h.mu.Lock()
 	h.clients[c] = struct{}{}
 	h.mu.Unlock()
-	if absPath, err := SafePath(h.root, c.watchPath); err == nil {
-		h.watcher.Add(absPath)
+	if h.watcher != nil {
+		if absPath, err := SafePath(h.root, c.watchPath); err == nil {
+			// Watch the parent directory instead of the file itself.
+			// Many editors (vim, emacs, IDEs) save via write-to-temp +
+			// rename, which replaces the inode. Watching the directory
+			// ensures we see the rename/create event for the new inode.
+			h.watcher.Add(filepath.Dir(absPath))
+		}
 	}
 }
 
 func (h *SSEHub) removeClient(c *sseClient) {
 	h.mu.Lock()
 	delete(h.clients, c)
+
+	// Remove the watched directory if no remaining client needs it.
+	// We check whether any other client watches a file in the same
+	// directory, not just the exact same file.
+	var dirToRemove string
+	if h.watcher != nil {
+		if absPath, err := SafePath(h.root, c.watchPath); err == nil {
+			dirToRemove = filepath.Dir(absPath)
+			for other := range h.clients {
+				if otherAbs, err := SafePath(h.root, other.watchPath); err == nil {
+					if filepath.Dir(otherAbs) == dirToRemove {
+						dirToRemove = ""
+						break
+					}
+				}
+			}
+		}
+	}
 	h.mu.Unlock()
+
+	if dirToRemove != "" {
+		h.watcher.Remove(dirToRemove)
+	}
 }
 
 func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
@@ -122,6 +166,10 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "watch parameter required", http.StatusBadRequest)
 		return
 	}
+	if _, err := SafePath(s.root, watchPath); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -134,7 +182,7 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	s.sseHub.addClient(client)
 	defer s.sseHub.removeClient(client)
 
-	fmt.Fprintf(w, "event: connected\ndata: %s\n\n", mustJSON(map[string]string{"type": "connected"}))
+	fmt.Fprintf(w, "event: connected\ndata: %s\n\n", toJSON(map[string]string{"type": "connected"}))
 	flusher.Flush()
 
 	ctx := r.Context()
@@ -143,7 +191,7 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			return
 		case path := <-client.events:
-			fmt.Fprintf(w, "event: change\ndata: %s\n\n", mustJSON(map[string]string{
+			fmt.Fprintf(w, "event: change\ndata: %s\n\n", toJSON(map[string]string{
 				"type": "change",
 				"path": path,
 			}))
@@ -152,7 +200,7 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func mustJSON(v interface{}) string {
+func toJSON(v interface{}) string {
 	b, _ := json.Marshal(v)
 	return string(b)
 }

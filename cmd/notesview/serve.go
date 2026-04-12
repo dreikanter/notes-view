@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/dreikanter/notesview/internal/logging"
 	"github.com/dreikanter/notesview/internal/server"
@@ -121,15 +122,26 @@ func resolvePath(p string) (root, initialFile string, err error) {
 	if err != nil {
 		return "", "", err
 	}
+	var dir string
 	if info.IsDir() {
-		return p, "", nil
+		dir = p
+	} else {
+		dir = filepath.Dir(p)
+		initialFile = filepath.Base(p)
 	}
-	return filepath.Dir(p), filepath.Base(p), nil
+	root, err = filepath.Abs(dir)
+	if err != nil {
+		return "", "", err
+	}
+	return root, initialFile, nil
 }
 
 func expandTilde(p string) string {
-	if len(p) > 0 && p[0] == '~' {
-		home, _ := os.UserHomeDir()
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return p
+		}
 		return home + p[1:]
 	}
 	return p
@@ -147,5 +159,9 @@ func openBrowser(url string) {
 	default:
 		return
 	}
-	cmd.Start()
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to open browser: %v\n", err)
+		return
+	}
+	go cmd.Wait()
 }
