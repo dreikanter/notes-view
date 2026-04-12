@@ -285,3 +285,46 @@ func (s *Server) handleDir(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
+
+func (s *Server) handleTags(w http.ResponseWriter, r *http.Request) {
+	tags := s.tagIndex.Tags()
+	entries := make([]IndexEntry, len(tags))
+	for i, tag := range tags {
+		entries[i] = IndexEntry{
+			Name: tag,
+			Href: "/tags/" + tagPath(tag),
+		}
+	}
+	card := &IndexCard{
+		Mode:        "tags",
+		Breadcrumbs: buildTagsListBreadcrumbs(),
+		Entries:     entries,
+		Empty:       "No tags found.",
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.templates.renderSidebarPartial(w, SidebarPartialData{IndexCard: card}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) handleTagNotes(w http.ResponseWriter, r *http.Request) {
+	tag := r.PathValue("tag")
+	notes := s.tagIndex.NotesByTag(tag)
+	entries := make([]IndexEntry, len(notes))
+	for i, notePath := range notes {
+		entries[i] = IndexEntry{
+			Name: filepath.Base(notePath),
+			Href: "/view/" + viewPath(notePath),
+		}
+	}
+	card := &IndexCard{
+		Mode:        "tag",
+		Breadcrumbs: buildTagBreadcrumbs(tag),
+		Entries:     entries,
+		Empty:       "No notes with this tag.",
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.templates.renderSidebarPartial(w, SidebarPartialData{IndexCard: card}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}

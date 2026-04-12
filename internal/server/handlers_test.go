@@ -371,3 +371,61 @@ func TestDirHandlerRoot(t *testing.T) {
 		t.Errorf("expected year dir in root sidebar, got: %s", body)
 	}
 }
+
+func TestTagsHandler(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	handler := srv.Routes()
+
+	req := httptest.NewRequest("GET", "/tags", nil)
+	req.Header.Set("HX-Request", "true")
+	req.Header.Set("HX-Target", "sidebar")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	// The test fixture has tags: [todo, daily]
+	if !strings.Contains(body, "todo") || !strings.Contains(body, "daily") {
+		t.Errorf("expected tags in sidebar, got: %s", body)
+	}
+}
+
+func TestTagNotesHandler(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	handler := srv.Routes()
+
+	req := httptest.NewRequest("GET", "/tags/todo", nil)
+	req.Header.Set("HX-Request", "true")
+	req.Header.Set("HX-Target", "sidebar")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "20260331_9201_todo.md") {
+		t.Errorf("expected todo note in filtered list, got: %s", body)
+	}
+}
+
+func TestTagNotesHandlerUnknownTag(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	handler := srv.Routes()
+
+	req := httptest.NewRequest("GET", "/tags/nonexistent", nil)
+	req.Header.Set("HX-Request", "true")
+	req.Header.Set("HX-Target", "sidebar")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "No notes") {
+		t.Errorf("expected empty state message, got: %s", body)
+	}
+}

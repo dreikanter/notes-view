@@ -67,6 +67,8 @@ func (s *Server) Routes() http.Handler {
 
 	mux.HandleFunc("GET /view/{filepath...}", s.handleView)
 	mux.HandleFunc("GET /dir/{path...}", s.handleDir)
+	mux.HandleFunc("GET /tags", s.handleTags)
+	mux.HandleFunc("GET /tags/{tag}", s.handleTagNotes)
 	mux.HandleFunc("POST /api/edit/{filepath...}", s.handleEdit)
 	mux.HandleFunc("GET /api/raw/{filepath...}", s.handleRaw)
 	mux.HandleFunc("GET /events", s.handleSSE)
