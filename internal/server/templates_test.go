@@ -45,7 +45,7 @@ func TestLoadTemplates_DefinedTemplates(t *testing.T) {
 	}
 
 	// The view template should include layout and all partials.
-	for _, name := range []string{"layout", "sidebar_body", "sidebar_tree", "note_pane_body", "index_card"} {
+	for _, name := range []string{"layout", "sidebar_body", "sidebar_tree", "note_pane_body"} {
 		if ts.view.Lookup(name) == nil {
 			t.Errorf("view template set missing %q", name)
 		}
@@ -59,7 +59,7 @@ func TestParsePage(t *testing.T) {
 	}
 
 	// Should include the page plus all partials.
-	for _, name := range []string{"layout", "sidebar_body", "sidebar_tree", "note_pane_body", "index_card"} {
+	for _, name := range []string{"layout", "sidebar_body", "sidebar_tree", "note_pane_body"} {
 		if tmpl.Lookup(name) == nil {
 			t.Errorf("parsePage result missing template %q", name)
 		}
@@ -110,13 +110,11 @@ func TestRenderView(t *testing.T) {
 		ViewHref: "/view/notes/test.md",
 		Sidebar: SidebarPartialData{
 			Files: &IndexCard{
-				Mode: "dir",
 				Entries: []IndexEntry{
 					{Name: "test.md", IsDir: false, Href: "/view/notes/test.md"},
 				},
 			},
 			Tags: &IndexCard{
-				Mode:    "tags",
 				Entries: nil,
 				Empty:   "No tags found.",
 			},
@@ -233,14 +231,12 @@ func TestRenderSidebarPartial(t *testing.T) {
 
 	data := SidebarPartialData{
 		Files: &IndexCard{
-			Mode: "dir",
 			Entries: []IndexEntry{
 				{Name: "readme.md", IsDir: false, Href: "/view/docs/readme.md"},
 				{Name: "subdir", IsDir: true, Href: "/view/docs/subdir/"},
 			},
 		},
 		Tags: &IndexCard{
-			Mode:  "tags",
 			Empty: "No tags found.",
 		},
 	}
@@ -285,7 +281,6 @@ func TestRenderSidebarPartial_Tree(t *testing.T) {
 	}
 	data := SidebarPartialData{
 		Files: &IndexCard{
-			Mode: "dir",
 			Entries: []IndexEntry{
 				{Name: "notes", IsDir: true, Href: "/dir/notes"},
 				{Name: "README.md", IsDir: false, Href: "/view/README.md"},
@@ -293,7 +288,6 @@ func TestRenderSidebarPartial_Tree(t *testing.T) {
 			Empty: "No files here.",
 		},
 		Tags: &IndexCard{
-			Mode: "tags",
 			Entries: []IndexEntry{
 				{Name: "golang", IsTag: true, Href: "/tags/golang"},
 				{Name: "til", IsTag: true, Href: "/tags/til"},

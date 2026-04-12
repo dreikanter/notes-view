@@ -65,7 +65,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	filesCard, err := s.buildDirIndex("")
 	if err != nil {
 		s.logger.Warn("sidebar files build failed", "dir", "", "err", err)
-		filesCard = &IndexCard{Mode: "dir", Empty: "Failed to read directory."}
+		filesCard = &IndexCard{Empty: "Failed to read directory."}
 	}
 	tagsCard := s.buildTagsIndex()
 	s.index.Rebuild()
@@ -156,7 +156,7 @@ func (s *Server) handleView(w http.ResponseWriter, r *http.Request) {
 	filesCard, err := s.buildDirIndex(sidebarDir)
 	if err != nil {
 		s.logger.Warn("sidebar files build failed", "dir", sidebarDir, "err", err)
-		filesCard = &IndexCard{Mode: "dir", Empty: "Failed to read directory."}
+		filesCard = &IndexCard{Empty: "Failed to read directory."}
 	}
 	tagsCard := s.buildTagsIndex()
 
@@ -207,7 +207,6 @@ func (s *Server) buildDirIndex(sidebarDir string) (*IndexCard, error) {
 		return nil, err
 	}
 	return &IndexCard{
-		Mode:    "dir",
 		Entries: entries,
 		Empty:   "No files here.",
 	}, nil
@@ -225,7 +224,6 @@ func (s *Server) buildTagsIndex() *IndexCard {
 		}
 	}
 	return &IndexCard{
-		Mode:    "tags",
 		Entries: entries,
 		Empty:   "No tags found.",
 	}
@@ -306,7 +304,7 @@ func (s *Server) handleDir(w http.ResponseWriter, r *http.Request) {
 	card, err := s.buildDirIndex(dirPath)
 	if err != nil {
 		s.logger.Warn("sidebar build failed", "dir", dirPath, "err", err)
-		card = &IndexCard{Mode: "dir", Empty: "Failed to read directory."}
+		card = &IndexCard{Empty: "Failed to read directory."}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if hxTargetedAt(r, "note-pane") {
@@ -349,7 +347,6 @@ func (s *Server) handleTagNotes(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	card := &IndexCard{
-		Mode:    "tag",
 		Entries: entries,
 		Empty:   "No notes with this tag.",
 	}

@@ -16,11 +16,8 @@ type IndexEntry struct {
 	Href  string
 }
 
-// IndexCard is the sidebar's data shape. Mode is kept as an extensibility
-// hook for future non-directory sources (search, tag); today only "dir"
-// is populated.
+// IndexCard is the sidebar's data shape.
 type IndexCard struct {
-	Mode    string
 	Entries []IndexEntry
 	Empty   string
 }
@@ -81,7 +78,6 @@ type templateSet struct {
 var partials = []string{
 	"templates/layout.html",
 	"templates/entry_list.html",
-	"templates/index_card.html",
 	"templates/sidebar_tree.html",
 	"templates/sidebar_body.html",
 	"templates/note_pane_body.html",
@@ -118,7 +114,7 @@ func parsePage(page string) (*template.Template, error) {
 // template, so a partial response doesn't accidentally include the
 // full layout.
 func parsePartial(name string) (*template.Template, error) {
-	return template.ParseFS(web.TemplatesFS, "templates/"+name+".html", "templates/entry_list.html", "templates/index_card.html", "templates/sidebar_tree.html")
+	return template.ParseFS(web.TemplatesFS, "templates/"+name+".html", "templates/entry_list.html", "templates/sidebar_tree.html")
 }
 
 func (t *templateSet) renderView(w io.Writer, data ViewData) error {
