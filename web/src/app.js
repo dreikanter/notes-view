@@ -16,23 +16,33 @@ function highlightIn(root) {
 }
 
 // Synthesize a short click sound using the Web Audio API.
-// A ~25ms square-wave burst gives a mechanical ratchet feel.
+// A brief burst of noise with sharp decay mimics a mechanical key click.
 let audioCtx = null;
+let clickBuffer = null;
+
+function initClickBuffer() {
+  const sampleRate = audioCtx.sampleRate;
+  const length = Math.floor(sampleRate * 0.008);
+  clickBuffer = audioCtx.createBuffer(1, length, sampleRate);
+  const data = clickBuffer.getChannelData(0);
+  for (let i = 0; i < length; i++) {
+    const envelope = 1 - i / length;
+    data[i] = (Math.random() * 2 - 1) * envelope * envelope;
+  }
+}
 
 function playClick() {
   if (!audioCtx) {
     audioCtx = new AudioContext();
+    initClickBuffer();
   }
-  const osc = audioCtx.createOscillator();
+  const src = audioCtx.createBufferSource();
+  src.buffer = clickBuffer;
   const gain = audioCtx.createGain();
-  osc.type = 'square';
-  osc.frequency.value = 1200;
-  gain.gain.value = 0.03;
-  osc.connect(gain);
+  gain.gain.value = 0.15;
+  src.connect(gain);
   gain.connect(audioCtx.destination);
-  const now = audioCtx.currentTime;
-  osc.start(now);
-  osc.stop(now + 0.025);
+  src.start();
 }
 
 document.addEventListener('DOMContentLoaded', function () {
