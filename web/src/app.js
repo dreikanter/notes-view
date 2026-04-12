@@ -20,10 +20,6 @@ document.addEventListener('DOMContentLoaded', function () {
   restoreSidebarState();
 });
 
-document.body.addEventListener('htmx:afterSwap', function (e) {
-  highlightIn(e.target);
-});
-
 // --- Sidebar toggle ---
 
 function wireSidebarToggle() {
@@ -48,89 +44,159 @@ function toggleSidebar() {
   }
 }
 
-// --- Sidebar mode state ---
+// --- Sidebar tree state ---
 
-function refreshSidebar() {
-  const mode = getSidebarMode();
-  let url;
-  if (mode === 'tags') {
-    url = '/tags';
-  } else if (mode === 'tag') {
-    const tag = getSidebarTag();
-    url = tag ? `/tags/${encodeURIComponent(tag)}` : '/tags';
-  } else {
-    const dir = getSidebarDir();
-    url = `/dir/${encodePath(dir)}`;
-  }
-  htmx.ajax('GET', url, {
-    target: '#sidebar',
-    swap: 'innerHTML',
-  });
+function getLS(key, fallback) {
+  try { return localStorage.getItem('notesview.' + key) || fallback; } catch (e) { return fallback; }
 }
 
-function restoreSidebarState() {
-  const mode = getSidebarMode();
-  if (mode === 'files') return; // Server already rendered files mode
-  refreshSidebar();
+function setLS(key, value) {
+  try { localStorage.setItem('notesview.' + key, value); } catch (e) {}
 }
 
-function getSidebarMode() {
-  try { return localStorage.getItem('notesview.sidebarMode') || 'files'; } catch (e) { return 'files'; }
-}
-
-function getSidebarTag() {
-  try { return localStorage.getItem('notesview.sidebarTag') || ''; } catch (e) { return ''; }
-}
-
-function getSidebarDir() {
-  try { return localStorage.getItem('notesview.sidebarDir') || ''; } catch (e) { return ''; }
-}
-
-// Encode a directory path for use in URLs, encoding each segment
-// individually while preserving literal / separators.
 function encodePath(p) {
   if (!p) return '';
   return p.split('/').map(encodeURIComponent).join('/');
 }
 
-// Global functions called from template onclick handlers.
-// These update localStorage before HTMX fires the request.
+// --- Section collapse/expand ---
 
-// switchToFiles navigates the sidebar to the root directory.
-// The breadcrumb trail handles navigation within the directory tree.
-window.switchToFiles = function() {
-  try {
-    localStorage.setItem('notesview.sidebarMode', 'files');
-    localStorage.setItem('notesview.sidebarDir', '');
-  } catch (e) {}
-  htmx.ajax('GET', '/dir/', {
-    target: '#sidebar',
+window.toggleSection = function(name) {
+  var content = document.getElementById(name + '-content');
+  var disclosure = document.getElementById(name + '-disclosure');
+  if (!content) return;
+  var isOpen = content.style.display !== 'none';
+  content.style.display = isOpen ? 'none' : '';
+  if (disclosure) disclosure.textContent = isOpen ? '\u25B8' : '\u25BE';
+  setLS(name + 'Open', isOpen ? '0' : '1');
+};
+
+function restoreSectionState(name) {
+  var open = getLS(name + 'Open', '1');
+  var content = document.getElementById(name + '-content');
+  var disclosure = document.getElementById(name + '-disclosure');
+  if (!content) return;
+  if (open === '0') {
+    content.style.display = 'none';
+    if (disclosure) disclosure.textContent = '\u25B8';
+  }
+}
+
+// --- Selection highlight ---
+
+function clearSelected() {
+  document.querySelectorAll('.entry-link.selected').forEach(function(el) {
+    el.classList.remove('selected', 'bg-blue-50', 'border-blue-200');
+  });
+}
+
+function markSelected(selector) {
+  clearSelected();
+  var el = document.querySelector(selector);
+  if (el) el.classList.add('selected', 'bg-blue-50', 'border-blue-200');
+}
+
+// --- Directory navigation ---
+
+window.selectDir = function(href) {
+  setLS('filesDir', href);
+  setLS('selected', href);
+
+  // Load listing in main panel
+  htmx.ajax('GET', href, {
+    target: '#note-pane',
     swap: 'innerHTML',
+    headers: { 'HX-Target': 'note-pane' },
+  });
+
+  // Load entries in sidebar files section
+  htmx.ajax('GET', href, {
+    target: '#files-content',
+    swap: 'innerHTML',
+  });
+
+  // Ensure files section is visible
+  var content = document.getElementById('files-content');
+  var disclosure = document.getElementById('files-disclosure');
+  if (content) content.style.display = '';
+  if (disclosure) disclosure.textContent = '\u25BE';
+  setLS('filesOpen', '1');
+};
+
+// --- Tag navigation ---
+
+window.selectTag = function(tag) {
+  var href = '/tags/' + encodeURIComponent(tag);
+  setLS('tagsTag', tag);
+  setLS('selected', href);
+
+  // Load listing in main panel
+  htmx.ajax('GET', href, {
+    target: '#note-pane',
+    swap: 'innerHTML',
+    headers: { 'HX-Target': 'note-pane' },
+  });
+
+  // Load entries in sidebar tags section
+  htmx.ajax('GET', href, {
+    target: '#tags-content',
+    swap: 'innerHTML',
+  });
+
+  // Ensure tags section is visible
+  var content = document.getElementById('tags-content');
+  var disclosure = document.getElementById('tags-disclosure');
+  if (content) content.style.display = '';
+  if (disclosure) disclosure.textContent = '\u25BE';
+  setLS('tagsOpen', '1');
+};
+
+// --- Note navigation ---
+
+window.selectNote = function(href) {
+  setLS('selected', href);
+
+  // Load note in main panel
+  htmx.ajax('GET', href, {
+    target: '#note-pane',
+    swap: 'innerHTML',
+    headers: { 'HX-Target': 'note-pane' },
   });
 };
 
-window.switchToTags = function() {
-  try {
-    localStorage.setItem('notesview.sidebarMode', 'tags');
-  } catch (e) {}
-  htmx.ajax('GET', '/tags', {
-    target: '#sidebar',
+// --- Restore state ---
+
+function refreshSidebar() {
+  var filesDir = getLS('filesDir', '');
+  var filesUrl = '/dir/' + encodePath(filesDir);
+  htmx.ajax('GET', filesUrl, {
+    target: '#files-content',
     swap: 'innerHTML',
   });
-};
 
-window.setSidebarTag = function(tag) {
-  try {
-    localStorage.setItem('notesview.sidebarMode', 'tag');
-    localStorage.setItem('notesview.sidebarTag', tag);
-  } catch (e) {}
-};
+  var tagsTag = getLS('tagsTag', '');
+  var tagsUrl = tagsTag ? '/tags/' + encodeURIComponent(tagsTag) : '/tags';
+  htmx.ajax('GET', tagsUrl, {
+    target: '#tags-content',
+    swap: 'innerHTML',
+  });
+}
 
-window.setSidebarDir = function(href) {
-  try {
-    // Extract dir path from /dir/... href
-    const dir = href.replace(/^\/dir\//, '');
-    localStorage.setItem('notesview.sidebarMode', 'files');
-    localStorage.setItem('notesview.sidebarDir', decodeURIComponent(dir));
-  } catch (e) {}
-};
+function restoreSidebarState() {
+  restoreSectionState('files');
+  restoreSectionState('tags');
+}
+
+// --- Selection highlight after HTMX swaps ---
+
+document.body.addEventListener('htmx:afterSwap', function(e) {
+  highlightIn(e.target);
+
+  // Re-apply selection highlight after any swap
+  var selected = getLS('selected', '');
+  if (selected) {
+    setTimeout(function() {
+      markSelected('[data-entry-href="' + selected + '"]');
+    }, 0);
+  }
+});
