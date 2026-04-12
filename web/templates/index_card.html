@@ -1,20 +1,29 @@
 {{ define "index_card" }}
 <div class="w-full">
   <header class="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center">
-    {{ if eq .Mode "dir" }}
     {{ template "breadcrumbs" .Breadcrumbs }}
-    {{ end }}
   </header>
   {{ if .Entries }}
   <ul class="list-none m-0 p-0">
     {{ range .Entries }}
-    {{ if .IsDir }}
+    {{ if eq $.Mode "tags" }}
     <li class="border-b border-gray-100 last:border-b-0">
       <a
         href="{{ .Href }}"
-        hx-boost="true"
+        hx-get="{{ .Href }}"
         hx-target="#sidebar"
         hx-swap="innerHTML"
+        onclick="setSidebarTag('{{ .Name }}')"
+        class="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 no-underline transition-colors duration-100 border border-transparent hover:bg-blue-100 hover:border-blue-300">&#127991;&#65039; {{ .Name }}</a>
+    </li>
+    {{ else if .IsDir }}
+    <li class="border-b border-gray-100 last:border-b-0">
+      <a
+        href="{{ .Href }}"
+        hx-get="{{ .Href }}"
+        hx-target="#sidebar"
+        hx-swap="innerHTML"
+        onclick="setSidebarDir('{{ .Href }}')"
         class="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 font-medium no-underline transition-colors duration-100 border border-transparent hover:bg-blue-100 hover:border-blue-300">&#128193; {{ .Name }}</a>
     </li>
     {{ else }}

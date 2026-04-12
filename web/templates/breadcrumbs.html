@@ -1,11 +1,20 @@
-{{ define "breadcrumbs" }}<nav class="flex-1 flex items-center gap-1 text-sm text-gray-500 overflow-hidden whitespace-nowrap">
-  <a class="text-blue-600 no-underline hover:underline" href="/dir/" hx-boost="true" hx-target="#sidebar" hx-swap="innerHTML" aria-label="Root">Root</a>
+{{ define "breadcrumbs" }}<nav class="flex-1 flex items-center gap-1.5 text-sm text-gray-500 overflow-hidden whitespace-nowrap">
+  <span class="inline-flex rounded-md border border-gray-300 overflow-hidden flex-shrink-0">
+    <button type="button"
+       onclick="switchToFiles()"
+       class="px-1.5 py-0.5 text-xs font-medium transition-colors {{ if eq .Mode "dir" }}bg-gray-700 text-white{{ else }}text-gray-500 hover:bg-gray-100{{ end }}"
+       aria-label="Browse files">&#128193;</button>
+    <button type="button"
+       onclick="switchToTags()"
+       class="px-1.5 py-0.5 text-xs font-medium border-l border-gray-300 transition-colors {{ if or (eq .Mode "tags") (eq .Mode "tag") }}bg-gray-700 text-white{{ else }}text-gray-500 hover:bg-gray-100{{ end }}"
+       aria-label="Browse tags">&#127991;&#65039;</button>
+  </span>
   {{ range .Crumbs }}
   <span class="text-gray-400 select-none">/</span>
   {{ if .Current }}
   <span aria-current="page" class="text-gray-900 overflow-hidden text-ellipsis">{{ .Label }}</span>
   {{ else }}
-  <a class="text-blue-600 no-underline hover:underline" href="{{ .Href }}" hx-boost="true" hx-target="#sidebar" hx-swap="innerHTML">{{ .Label }}</a>
+  <a class="text-blue-600 no-underline hover:underline" href="{{ .Href }}" hx-get="{{ .Href }}" hx-target="#sidebar" hx-swap="innerHTML">{{ .Label }}</a>
   {{ end }}
   {{ end }}
 </nav>{{ end }}
