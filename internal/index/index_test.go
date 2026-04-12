@@ -1,8 +1,12 @@
 package index
 
 import (
+	"bytes"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -20,7 +24,7 @@ func setupTestDir(t *testing.T) string {
 
 func TestIndexBuild(t *testing.T) {
 	dir := setupTestDir(t)
-	idx := New(dir)
+	idx := New(dir, nil)
 	if err := idx.Build(); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
@@ -46,6 +50,57 @@ func TestIndexBuild(t *testing.T) {
 				t.Errorf("Lookup(%q) = %q, want %q", tt.uid, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestBuildSkipsUnreadableDirs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission-based test not reliable on Windows")
+	}
+
+	dir := setupTestDir(t)
+
+	// Create a subdirectory that is not readable.
+	unreadable := filepath.Join(dir, "2026", "secret")
+	if err := os.MkdirAll(unreadable, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(unreadable, "20260401_0001.md"), []byte("# Secret"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := os.Chmod(unreadable, 0o000); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(unreadable, 0o755) })
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+
+	idx := New(dir, logger)
+	if err := idx.Build(); err != nil {
+		t.Fatalf("Build returned unexpected error: %v", err)
+	}
+
+	// Files in readable dirs should still be indexed.
+	if _, ok := idx.Lookup("20260331_9201"); !ok {
+		t.Error("expected 20260331_9201 to be indexed")
+	}
+
+	// File in the unreadable dir should be skipped.
+	if _, ok := idx.Lookup("20260401_0001"); ok {
+		t.Error("expected 20260401_0001 to be skipped")
+	}
+
+	// A warning should have been logged.
+	if !strings.Contains(buf.String(), "permission denied") {
+		t.Errorf("expected permission denied warning in log, got: %s", buf.String())
+	}
+}
+
+func TestBuildReturnsNonPermissionError(t *testing.T) {
+	idx := New("/nonexistent-root-path-that-does-not-exist", nil)
+	if err := idx.Build(); err == nil {
+		t.Fatal("expected Build to return an error for nonexistent root")
 	}
 }
 

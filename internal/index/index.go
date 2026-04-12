@@ -1,11 +1,16 @@
 package index
 
 import (
+	"errors"
+	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/dreikanter/notesview/internal/logging"
 )
 
 var uidPattern = regexp.MustCompile(`^(\d{8}_\d+)`)
@@ -18,15 +23,20 @@ func IsUID(s string) bool {
 
 type Index struct {
 	root     string
+	logger   *slog.Logger
 	mu       sync.RWMutex
 	uids     map[string]string
 	building sync.Mutex
 }
 
-func New(root string) *Index {
+func New(root string, logger *slog.Logger) *Index {
+	if logger == nil {
+		logger = logging.Discard()
+	}
 	return &Index{
-		root: root,
-		uids: make(map[string]string),
+		root:   root,
+		logger: logger,
+		uids:   make(map[string]string),
 	}
 }
 
@@ -38,7 +48,9 @@ func (idx *Index) Rebuild() {
 	}
 	go func() {
 		defer idx.building.Unlock()
-		idx.Build()
+		if err := idx.Build(); err != nil {
+			idx.logger.Error("index rebuild failed", "err", err)
+		}
 	}()
 }
 
@@ -46,7 +58,11 @@ func (idx *Index) Build() error {
 	uids := make(map[string]string)
 	err := filepath.WalkDir(idx.root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			if errors.Is(err, fs.ErrPermission) {
+				idx.logger.Warn("skipping path: permission denied", "path", path)
+				return filepath.SkipDir
+			}
+			return err
 		}
 		if d.IsDir() {
 			return nil
