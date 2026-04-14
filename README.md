@@ -67,3 +67,9 @@ make lint           # run golangci-lint
 The committed `web/static/` artifacts are built from `web/src/` via Vite, so `go install`
 and `go build` work without a Node toolchain. Contributors who touch files under `web/src/`
 must rerun `make assets` and commit the regenerated `web/static/` files.
+
+## Deployment
+
+A public preview is deployed to a VPS on every push to `main`. See
+[`docs/deployment.md`](docs/deployment.md) for the workflow, the idempotent
+provisioning script, and the required GitHub secrets.

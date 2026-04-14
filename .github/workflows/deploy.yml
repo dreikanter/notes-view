@@ -1,0 +1,74 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build notesview binary
+        run: |
+          CGO_ENABLED=0 go build \
+            -trimpath \
+            -ldflags "-s -w -X main.Version=${GITHUB_SHA::7}" \
+            -o deploy/notesview \
+            ./cmd/notesview
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${SSH_PRIVATE_KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "${SSH_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Write runtime env file
+        env:
+          CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
+          BASIC_AUTH_ENABLED: ${{ secrets.BASIC_AUTH_ENABLED }}
+          BASIC_AUTH_USER: ${{ secrets.BASIC_AUTH_USER }}
+          BASIC_AUTH_HASH: ${{ secrets.BASIC_AUTH_HASH }}
+        run: |
+          umask 077
+          {
+            printf 'CADDY_DOMAIN=%q\n' "${CADDY_DOMAIN}"
+            printf 'BASIC_AUTH_ENABLED=%q\n' "${BASIC_AUTH_ENABLED:-0}"
+            printf 'BASIC_AUTH_USER=%q\n' "${BASIC_AUTH_USER:-}"
+            printf 'BASIC_AUTH_HASH=%q\n' "${BASIC_AUTH_HASH:-}"
+          } > deploy/.env
+
+      - name: Rsync deploy payload to VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          rsync -az --delete \
+            --exclude '.env' \
+            deploy/ "${VPS_USER}@${VPS_HOST}:/opt/notesview-deploy/"
+          # .env carries secrets; send it with restrictive perms and don't include it in --delete scan
+          rsync -az --chmod=F600 deploy/.env "${VPS_USER}@${VPS_HOST}:/opt/notesview-deploy/.env"
+
+      - name: Run provision.sh on VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh "${VPS_USER}@${VPS_HOST}" 'bash /opt/notesview-deploy/provision.sh'

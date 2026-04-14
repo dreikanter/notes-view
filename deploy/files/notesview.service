@@ -1,0 +1,43 @@
+[Unit]
+Description=notesview markdown preview server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=notesview
+Group=notesview
+Environment=NOTESVIEW_PORT=8080
+Environment=NOTESVIEW_PATH=/var/lib/notesview/notes
+Environment=NOTESVIEW_LOG_FORMAT=json
+# NOTESVIEW_EDITOR deliberately unset: the "open in editor" feature would
+# launch processes on this host. The reverse proxy also gates access with
+# optional basic auth, but leaving the editor unset makes it a no-op regardless.
+ExecStart=/var/lib/notesview/bin/notesview serve
+Restart=on-failure
+RestartSec=5s
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/notesview
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target
