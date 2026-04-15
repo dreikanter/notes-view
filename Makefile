@@ -1,6 +1,7 @@
-.PHONY: build test lint clean assets assets-watch all install update
+.PHONY: build test lint clean assets assets-watch all install update desktop desktop-dev
 
 BINARY := notesview
+DESKTOP_BINARY := notesview-desktop
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X main.Version=$(VERSION)
 
@@ -8,6 +9,17 @@ all: assets build
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/$(BINARY)
+
+# desktop builds the Wails-wrapped native app. Requires a CGO toolchain
+# and platform webview deps: WebKit2GTK (Linux), Xcode CLT (macOS),
+# WebView2 runtime (Windows). See README.md for details.
+desktop: assets
+	go build -tags production -ldflags "$(LDFLAGS) -w -s" -o $(DESKTOP_BINARY) ./cmd/$(DESKTOP_BINARY)
+
+# desktop-dev builds an unoptimised desktop binary with Wails' dev tags
+# so the webview devtools are reachable.
+desktop-dev: assets
+	go build -tags dev -ldflags "$(LDFLAGS)" -o $(DESKTOP_BINARY) ./cmd/$(DESKTOP_BINARY)
 
 test:
 	go test ./...
@@ -22,7 +34,7 @@ assets-watch:
 	npx vite build --watch
 
 clean:
-	rm -f $(BINARY)
+	rm -f $(BINARY) $(DESKTOP_BINARY)
 
 install:
 	go install -ldflags "$(LDFLAGS)" ./cmd/$(BINARY)

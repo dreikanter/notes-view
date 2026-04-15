@@ -53,6 +53,31 @@ notesview serve --open                    # open browser on start
 notesview serve --editor=code             # use VS Code to open files
 ```
 
+## Desktop (prototype)
+
+A Wails v2 wrapper ships under `cmd/notesview-desktop`. It reuses the same
+HTTP server, but hands the handler to Wails' in-process asset server instead
+of binding a TCP port, so the webview loads the app directly.
+
+```sh
+make desktop        # build ./notesview-desktop
+./notesview-desktop --path ~/notes
+```
+
+Configuration mirrors `notesview serve`: the `--path` / `--editor` flags and
+the `NOTESVIEW_PATH`, `NOTES_PATH`, `NOTESVIEW_EDITOR`, `VISUAL`, `EDITOR`,
+and `NOTESVIEW_LOG_*` environment variables are honoured.
+
+Build requirements (Wails v2 uses the OS webview via cgo):
+
+- **Linux:** `libgtk-3-dev` and `libwebkit2gtk-4.1-dev` (or `-4.0-dev`)
+- **macOS:** Xcode Command Line Tools
+- **Windows:** the [WebView2 runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
+
+For proper app bundles (macOS `.app`, Windows installer, icons, signing)
+install the [Wails CLI](https://wails.io/docs/gettingstarted/installation)
+and run `wails build` from `cmd/notesview-desktop`.
+
 ## Development
 
 ```sh
@@ -60,6 +85,8 @@ make all            # build web assets (Vite) and Go binary
 make assets         # rebuild web assets only
 make assets-watch   # rebuild web assets on source change
 make build          # build Go binary only (assumes assets already built)
+make desktop        # build the Wails desktop wrapper
+make desktop-dev    # desktop build with devtools enabled
 make test           # run Go tests
 make lint           # run golangci-lint
 ```
