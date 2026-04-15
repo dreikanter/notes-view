@@ -63,9 +63,13 @@ if ! id notesview >/dev/null 2>&1; then
     log "creating notesview system user"
     useradd --system --home /var/lib/notesview --shell /usr/sbin/nologin notesview
 fi
-install -d -o notesview -g notesview -m 0755 /var/lib/notesview
-install -d -o notesview -g notesview -m 0755 "${BIN_DIR}"
-install -d -o notesview -g notesview -m 0755 "${NOTES_DIR}"
+# Bin dir and binary stay root-owned so a compromised notesview process cannot
+# replace its own executable. Notes dir is also root-owned and world-readable:
+# a separate rsync job (running as the deploy user) writes to it, notesview
+# only reads.
+install -d -o root -g root -m 0755 /var/lib/notesview
+install -d -o root -g root -m 0755 "${BIN_DIR}"
+install -d -o root -g root -m 0755 "${NOTES_DIR}"
 
 # --- systemd unit -----------------------------------------------------------
 if ! cmp -s "${DEPLOY_DIR}/files/notesview.service" "${SYSTEMD_UNIT}"; then
@@ -96,6 +100,11 @@ trap 'rm -f "${tmp_caddy}"' EXIT
     printf '}\n'
 } > "${tmp_caddy}"
 
+# Validate before swapping in: catches typos in CADDY_DOMAIN or malformed
+# BASIC_AUTH_HASH that would otherwise produce a broken /etc/caddy/Caddyfile.
+log "validating Caddyfile"
+caddy validate --adapter caddyfile --config "${tmp_caddy}" >/dev/null
+
 if ! cmp -s "${tmp_caddy}" "${CADDY_FILE}"; then
     log "updating Caddyfile (auth enabled=${BASIC_AUTH_ENABLED})"
     install -m 0644 "${tmp_caddy}" "${CADDY_FILE}"
@@ -108,7 +117,7 @@ if [ ! -f "${DEPLOY_DIR}/notesview" ]; then
     exit 1
 fi
 log "installing notesview binary"
-install -m 0755 -o notesview -g notesview \
+install -m 0755 -o root -g root \
     "${DEPLOY_DIR}/notesview" "${BIN_DIR}/notesview.new"
 mv -f "${BIN_DIR}/notesview.new" "${BIN_DIR}/notesview"
 

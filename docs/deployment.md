@@ -61,7 +61,7 @@ Add these in **Settings → Secrets and variables → Actions**:
 | `SSH_PRIVATE_KEY`     | Contents of `notesview-deploy` (the private key)                |
 | `SSH_KNOWN_HOSTS`     | Output of `ssh-keyscan -t ed25519 notes.fffeeder.com`           |
 | `VPS_HOST`            | `notes.fffeeder.com`                                            |
-| `VPS_USER`            | `root` (or another user with write access to `/opt/notesview-deploy/` and permission to run the script) |
+| `VPS_USER`            | `root`, or a user with passwordless-sudo for `/opt/notesview-deploy/provision.sh` (see below) |
 | `CADDY_DOMAIN`        | `notes.fffeeder.com`                                            |
 | `BASIC_AUTH_ENABLED`  | `1` to require auth, `0` to expose openly                       |
 | `BASIC_AUTH_USER`     | Username (only read when `BASIC_AUTH_ENABLED=1`)                |
@@ -76,6 +76,16 @@ caddy hash-password
 ```
 
 Paste the full `$2a$...` string into `BASIC_AUTH_HASH`.
+
+The deploy workflow runs the script with `sudo -n`. If `VPS_USER=root`, that is
+a no-op. For a non-root deploy user, grant NOPASSWD sudo by adding a line to
+`/etc/sudoers.d/notesview-deploy`:
+
+```
+deploy ALL=(root) NOPASSWD: /usr/bin/bash /opt/notesview-deploy/provision.sh
+```
+
+(Replace `deploy` with the actual username; `visudo -f /etc/sudoers.d/notesview-deploy`.)
 
 ### 4. Populate sample notes
 

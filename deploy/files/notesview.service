@@ -34,7 +34,10 @@ RestrictNamespaces=true
 LockPersonality=true
 RestrictRealtime=true
 RestrictSUIDSGID=true
-ReadWritePaths=/var/lib/notesview
+# notesview is a read-only viewer: no ReadWritePaths are granted. The binary
+# lives in /var/lib/notesview/bin (root-owned) and notes live in
+# /var/lib/notesview/notes (updated out-of-band by a separate rsync job).
+# PrivateTmp=true covers any ephemeral writes.
 CapabilityBoundingSet=
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
