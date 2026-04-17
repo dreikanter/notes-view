@@ -9,7 +9,7 @@ LDFLAGS := -X main.Version=$(VERSION)
 # UniformTypeIdentifiers framework. `wails build` injects this automatically;
 # plain `go build` does not, so we add it here.
 ifeq ($(shell uname),Darwin)
-DESKTOP_CGO_LDFLAGS := -framework UniformTypeIdentifiers -mmacosx-version-min=10.13
+DESKTOP_CGO_LDFLAGS := -framework UniformTypeIdentifiers
 endif
 
 all: assets build
