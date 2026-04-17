@@ -279,9 +279,6 @@ func uidDate(uid string) (time.Time, bool) {
 	}
 	head := uid[:underscore]
 	yearLen := len(head) - 4
-	if yearLen < 1 {
-		return time.Time{}, false
-	}
 	y, err := strconv.Atoi(head[:yearLen])
 	if err != nil {
 		return time.Time{}, false
