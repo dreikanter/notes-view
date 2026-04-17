@@ -90,6 +90,7 @@ Extract the text between the first two `---` fences on their own lines, `yaml.Un
 ```go
 type frontmatter struct {
     Title   string    `yaml:"title"`
+    Slug    string    `yaml:"slug"`
     Tags    []string  `yaml:"tags"`
     Aliases []string  `yaml:"aliases"`
     Date    time.Time `yaml:"date"`
