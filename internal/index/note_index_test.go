@@ -513,3 +513,56 @@ func TestNoteEntryDateUIDInvalidFallsThrough(t *testing.T) {
 		t.Errorf("DateSource = %q, want frontmatter (UID date invalid)", e.DateSource)
 	}
 }
+
+func TestMalformedFrontmatterDoesNotFailBuild(t *testing.T) {
+	dir := t.TempDir()
+	mustWriteFile(t, filepath.Join(dir, "bad.md"),
+		"---\ntags: [unterminated\n---\n")
+	mustWriteFile(t, filepath.Join(dir, "20260331_9201.md"),
+		"---\ntags: [golang]\n---\n")
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+
+	idx := New(dir, logger)
+	if err := idx.Build(); err != nil {
+		t.Fatalf("Build returned error, want nil: %v", err)
+	}
+	if _, ok := idx.NoteByUID("20260331_9201"); !ok {
+		t.Error("sibling UID entry should still be indexed")
+	}
+	// The malformed file is still recorded as an entry (no UID, no tags).
+	e := entryByRel(t, idx, "bad.md")
+	if len(e.Tags) != 0 {
+		t.Errorf("bad.md tags = %v, want none", e.Tags)
+	}
+	if !strings.Contains(buf.String(), "frontmatter parse failed") {
+		t.Errorf("expected parse-failed warning in log, got: %s", buf.String())
+	}
+}
+
+func TestUnreadableFileStillIndexedByUID(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file-mode-based test not reliable on Windows")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "20260331_9201.md")
+	mustWriteFile(t, path, "---\ntags: [go]\n---\n")
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+
+	idx := New(dir, nil)
+	if err := idx.Build(); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	// UID still comes from the filename; content was unreadable.
+	if _, ok := idx.NoteByUID("20260331_9201"); !ok {
+		t.Error("UID should still be indexed even when file contents unreadable")
+	}
+	// Tags should be absent (we couldn't read the frontmatter).
+	if got := idx.NotesByTag("go"); len(got) != 0 {
+		t.Errorf("NotesByTag(go) = %v, want empty (file unreadable)", got)
+	}
+}
