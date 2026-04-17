@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -74,6 +75,15 @@ func (h *SSEHub) eventLoop() {
 				return
 			}
 			if event.Op&(fsnotify.Write|fsnotify.Create) == 0 {
+				continue
+			}
+			// Ignore non-.md events: editor swap/backup files (*.swp,
+			// *~, .#*, numeric temps like 4913) and any other non-note
+			// writes should not trigger index work. The .md suffix
+			// check covers all of these — no explicit pattern list
+			// needed. Editors that save-via-rename still fire a final
+			// Create/Write on the real .md path, which this catches.
+			if !strings.HasSuffix(strings.ToLower(event.Name), ".md") {
 				continue
 			}
 			// Content (frontmatter) and filenames (UIDs) can both

@@ -39,7 +39,7 @@ func parseFrontmatter(path string) (frontmatter, error) {
 	if err != nil {
 		return fm, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	// Allow very long frontmatter lines (defensive against defaults).

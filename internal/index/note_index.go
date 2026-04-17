@@ -2,6 +2,7 @@ package index
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -93,7 +94,7 @@ func (i *NoteIndex) Build() error {
 
 		rel, err := filepath.Rel(i.root, path)
 		if err != nil {
-			return nil
+			return fmt.Errorf("filepath.Rel %s -> %s: %w", i.root, path, err)
 		}
 		rel = filepath.ToSlash(rel)
 

@@ -97,6 +97,9 @@ func TestBuildSkipsUnreadableDirs(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("permission-based test not reliable on Windows")
 	}
+	if os.Geteuid() == 0 {
+		t.Skip("permission-based test not reliable when running as root")
+	}
 
 	dir := setupNoteIndexDir(t)
 	unreadable := filepath.Join(dir, "2026", "secret")
@@ -544,6 +547,9 @@ func TestMalformedFrontmatterDoesNotFailBuild(t *testing.T) {
 func TestUnreadableFileStillIndexedByUID(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("file-mode-based test not reliable on Windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("permission-based test not reliable when running as root")
 	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "20260331_9201.md")
