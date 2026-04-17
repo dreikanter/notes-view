@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -281,15 +282,15 @@ func uidDate(uid string) (time.Time, bool) {
 	if yearLen < 1 {
 		return time.Time{}, false
 	}
-	y, err := parseIntASCII(head[:yearLen])
+	y, err := strconv.Atoi(head[:yearLen])
 	if err != nil {
 		return time.Time{}, false
 	}
-	m, err := parseIntASCII(head[yearLen : yearLen+2])
+	m, err := strconv.Atoi(head[yearLen : yearLen+2])
 	if err != nil {
 		return time.Time{}, false
 	}
-	d, err := parseIntASCII(head[yearLen+2:])
+	d, err := strconv.Atoi(head[yearLen+2:])
 	if err != nil {
 		return time.Time{}, false
 	}
@@ -301,25 +302,6 @@ func uidDate(uid string) (time.Time, bool) {
 	}
 	return t, true
 }
-
-func parseIntASCII(s string) (int, error) {
-	if s == "" {
-		return 0, errEmptyInt
-	}
-	n := 0
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return 0, errNonDigit
-		}
-		n = n*10 + int(c-'0')
-	}
-	return n, nil
-}
-
-var (
-	errEmptyInt = errors.New("empty int")
-	errNonDigit = errors.New("non-digit in int")
-)
 
 // dedupStrings returns s with duplicates removed, preserving first-seen
 // order. A nil or empty input returns nil.
