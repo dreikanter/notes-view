@@ -206,3 +206,48 @@ func TestParseFrontmatterDate(t *testing.T) {
 		t.Errorf("Date = %v, want 2026-04-17", fm.Date)
 	}
 }
+
+func TestParseFrontmatterEmptyFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.md")
+	mustWriteFile(t, path, "")
+
+	fm, err := parseFrontmatter(path)
+	if err != nil {
+		t.Fatalf("parseFrontmatter: %v", err)
+	}
+	if fm.Title != "" || len(fm.Tags) != 0 {
+		t.Errorf("expected zero-value frontmatter, got %+v", fm)
+	}
+}
+
+func TestParseFrontmatterEmptyBetweenFences(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.md")
+	mustWriteFile(t, path, "---\n---\n")
+
+	fm, err := parseFrontmatter(path)
+	if err != nil {
+		t.Fatalf("parseFrontmatter: %v", err)
+	}
+	if fm.Title != "" || len(fm.Tags) != 0 {
+		t.Errorf("expected zero-value frontmatter, got %+v", fm)
+	}
+}
+
+func TestParseFrontmatterIndentedTripleDashIsNotFence(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.md")
+	// Opening fence is valid. The body contains an indented "  ---"
+	// line inside a multi-line YAML value; it must NOT be treated as
+	// the closing fence.
+	mustWriteFile(t, path, "---\ndescription: |\n  ---\n  second line\ntags: [x]\n---\n")
+
+	fm, err := parseFrontmatter(path)
+	if err != nil {
+		t.Fatalf("parseFrontmatter: %v", err)
+	}
+	if len(fm.Tags) != 1 || fm.Tags[0] != "x" {
+		t.Errorf("Tags = %v, want [x]", fm.Tags)
+	}
+}

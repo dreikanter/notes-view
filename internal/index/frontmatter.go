@@ -9,6 +9,14 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// isFenceLine reports whether line is an exact "---" frontmatter fence.
+// Accepts an optional trailing "\r" to tolerate CRLF line endings. Does
+// not accept leading or other trailing whitespace — fences must appear
+// on a line by themselves (Jekyll/Hugo/Pandoc convention).
+func isFenceLine(line string) bool {
+	return line == "---" || line == "---\r"
+}
+
 // frontmatter is the typed per-file frontmatter. Fields not carried by a
 // given file default to Go zero values. The struct is intentionally
 // private: extending it with new fields is a local change.
@@ -40,7 +48,7 @@ func parseFrontmatter(path string) (frontmatter, error) {
 	if !scanner.Scan() {
 		return fm, scanner.Err()
 	}
-	if strings.TrimSpace(scanner.Text()) != "---" {
+	if !isFenceLine(scanner.Text()) {
 		return fm, nil
 	}
 
@@ -48,7 +56,7 @@ func parseFrontmatter(path string) (frontmatter, error) {
 	closed := false
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.TrimSpace(line) == "---" {
+		if isFenceLine(line) {
 			closed = true
 			break
 		}
