@@ -123,3 +123,86 @@ func TestBuildSkipsUnreadableDirs(t *testing.T) {
 		t.Errorf("expected permission denied warning in log, got: %s", buf.String())
 	}
 }
+
+func TestParseFrontmatterInlineTags(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.md")
+	mustWriteFile(t, path, "---\ntitle: Hello\ntags: [golang, web]\naliases: [\"h\", 'hi']\n---\n# Body\n")
+
+	fm, err := parseFrontmatter(path)
+	if err != nil {
+		t.Fatalf("parseFrontmatter: %v", err)
+	}
+	if fm.Title != "Hello" {
+		t.Errorf("Title = %q, want %q", fm.Title, "Hello")
+	}
+	if len(fm.Tags) != 2 || fm.Tags[0] != "golang" || fm.Tags[1] != "web" {
+		t.Errorf("Tags = %v, want [golang web]", fm.Tags)
+	}
+	if len(fm.Aliases) != 2 || fm.Aliases[0] != "h" || fm.Aliases[1] != "hi" {
+		t.Errorf("Aliases = %v, want [h hi]", fm.Aliases)
+	}
+}
+
+func TestParseFrontmatterBlockList(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.md")
+	mustWriteFile(t, path, "---\ntags:\n  - alpha\n  - beta\naliases:\n  - a1\n---\n")
+
+	fm, err := parseFrontmatter(path)
+	if err != nil {
+		t.Fatalf("parseFrontmatter: %v", err)
+	}
+	if len(fm.Tags) != 2 || fm.Tags[0] != "alpha" || fm.Tags[1] != "beta" {
+		t.Errorf("Tags = %v", fm.Tags)
+	}
+	if len(fm.Aliases) != 1 || fm.Aliases[0] != "a1" {
+		t.Errorf("Aliases = %v", fm.Aliases)
+	}
+}
+
+func TestParseFrontmatterMissingFences(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.md")
+	mustWriteFile(t, path, "# No frontmatter here\n")
+
+	fm, err := parseFrontmatter(path)
+	if err != nil {
+		t.Fatalf("parseFrontmatter: %v", err)
+	}
+	if fm.Title != "" || len(fm.Tags) != 0 || len(fm.Aliases) != 0 {
+		t.Errorf("expected zero-value frontmatter, got %+v", fm)
+	}
+}
+
+func TestParseFrontmatterMalformedYAMLIsError(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.md")
+	mustWriteFile(t, path, "---\ntags: [unterminated\n---\n")
+
+	_, err := parseFrontmatter(path)
+	if err == nil {
+		t.Fatal("expected YAML parse error, got nil")
+	}
+}
+
+func TestParseFrontmatterReadError(t *testing.T) {
+	_, err := parseFrontmatter("/nonexistent/file/path.md")
+	if err == nil {
+		t.Fatal("expected read error, got nil")
+	}
+}
+
+func TestParseFrontmatterDate(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.md")
+	mustWriteFile(t, path, "---\ndate: 2026-04-17\n---\n")
+
+	fm, err := parseFrontmatter(path)
+	if err != nil {
+		t.Fatalf("parseFrontmatter: %v", err)
+	}
+	if fm.Date.Year() != 2026 || fm.Date.Month() != 4 || fm.Date.Day() != 17 {
+		t.Errorf("Date = %v, want 2026-04-17", fm.Date)
+	}
+}
