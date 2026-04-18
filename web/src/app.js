@@ -111,11 +111,11 @@ var pendingScrollToSelected = false;
 
 // --- Directory navigation ---
 
-window.selectDir = function(href, skipPush) {
+window.selectDir = function(href, skipPush, fromSidebar) {
   var dirPath = href.replace(/^\/dir\//, '');
   setLS('filesDir', decodeURIComponent(dirPath));
   setLS('selected', href);
-  pendingScrollToSelected = true;
+  if (!fromSidebar) pendingScrollToSelected = true;
 
   // Push browser URL
   if (!skipPush) history.pushState({ type: 'dir', href: href }, '', href);
@@ -163,11 +163,11 @@ window.toggleDir = function(href, isExpanded) {
 
 // --- Tag navigation ---
 
-window.selectTag = function(tag, skipPush) {
+window.selectTag = function(tag, skipPush, fromSidebar) {
   var href = '/tags/' + encodeURIComponent(tag);
   setLS('tagsTag', tag);
   setLS('selected', href);
-  pendingScrollToSelected = true;
+  if (!fromSidebar) pendingScrollToSelected = true;
 
   // Push browser URL
   if (!skipPush) history.pushState({ type: 'tag', tag: tag, href: href }, '', href);
@@ -191,9 +191,9 @@ window.selectTag = function(tag, skipPush) {
 
 var pendingNoteScrollReset = false;
 
-window.selectNote = function(href, skipPush) {
+window.selectNote = function(href, skipPush, fromSidebar) {
   setLS('selected', href);
-  pendingScrollToSelected = true;
+  if (!fromSidebar) pendingScrollToSelected = true;
 
   // Push browser URL
   if (!skipPush) history.pushState({ type: 'note', href: href }, '', href);
@@ -289,13 +289,16 @@ document.addEventListener('click', function(e) {
   var link = e.target.closest('[data-action]');
   if (!link) return;
   e.preventDefault();
+  // Clicks originating inside the sidebar should not scroll the sidebar
+  // to center the clicked item — the user already has it under the cursor.
+  var fromSidebar = !!e.target.closest('#sidebar');
   var action = link.dataset.action;
   if (action === 'selectTag') {
-    selectTag(link.dataset.entryName);
+    selectTag(link.dataset.entryName, false, fromSidebar);
   } else if (action === 'selectDir') {
-    selectDir(link.dataset.entryHref);
+    selectDir(link.dataset.entryHref, false, fromSidebar);
   } else if (action === 'selectNote') {
-    selectNote(link.dataset.entryHref);
+    selectNote(link.dataset.entryHref, false, fromSidebar);
   } else if (action === 'toggleDir') {
     toggleDir(link.dataset.entryHref, link.dataset.expanded === '1');
   }
