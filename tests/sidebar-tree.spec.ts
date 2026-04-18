@@ -109,6 +109,33 @@ test.describe('Sidebar Tree Navigation', () => {
     await expect(page).toHaveURL(/\/view\/README\.md/);
   });
 
+  test('chevron on one dir does not collapse a separately expanded dir', async ({ page }) => {
+    await page.goto('/view/README.md');
+    await page.click('#sidebar-toggle');
+
+    const filesContent = page.locator('#files-content');
+
+    // Expand two independent branches via chevrons
+    await filesContent.locator('button[data-entry-href="/dir/journal"]').click();
+    await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toBeVisible();
+    await filesContent.locator('button[data-entry-href="/dir/projects"]').click();
+    await expect(filesContent.locator('a', { hasText: 'alpha.md' })).toBeVisible();
+
+    // Both must remain visible after expanding the second branch
+    await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toBeVisible();
+    await expect(filesContent.locator('a', { hasText: 'alpha.md' })).toBeVisible();
+
+    // Collapse journal — projects must stay expanded
+    await filesContent.locator('button[data-entry-href="/dir/journal"]').click();
+    await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toHaveCount(0);
+    await expect(filesContent.locator('a', { hasText: 'alpha.md' })).toBeVisible();
+
+    // Re-expand journal — projects must still be there
+    await filesContent.locator('button[data-entry-href="/dir/journal"]').click();
+    await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toBeVisible();
+    await expect(filesContent.locator('a', { hasText: 'alpha.md' })).toBeVisible();
+  });
+
   test('chevron toggle expands a collapsed directory without changing URL', async ({ page }) => {
     await page.goto('/view/README.md');
     await page.click('#sidebar-toggle');

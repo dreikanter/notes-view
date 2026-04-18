@@ -38,10 +38,9 @@ function toggleSidebar() {
   try {
     localStorage.setItem('notesview.sidebarOpen', open ? '1' : '0');
   } catch (e) {}
-
-  if (open) {
-    refreshSidebar();
-  }
+  // No sidebar refetch on open: the tree is rendered server-side at page
+  // load and then managed locally via chevrons. Refetching would wipe
+  // every expansion the user opened by hand.
 }
 
 // --- Sidebar tree state ---
@@ -132,7 +131,6 @@ window.selectDir = function(href, skipPush, fromSidebar) {
   if (!fromSidebar) {
     var dirPath = href.replace(/^\/dir\//, '');
     var decoded = decodeURIComponent(dirPath);
-    setLS('filesDir', decoded);
     ensureDirPathVisible(decoded, true).then(function() {
       revealSelected(href);
     });
@@ -345,22 +343,6 @@ window.addEventListener('popstate', function(e) {
 });
 
 // --- Restore state ---
-
-function refreshSidebar() {
-  var filesDir = getLS('filesDir', '');
-  var filesUrl = '/dir/' + encodePath(filesDir);
-  htmx.ajax('GET', filesUrl, {
-    target: '#files-content',
-    swap: 'innerHTML',
-  });
-
-  var tagsTag = getLS('tagsTag', '');
-  var tagsUrl = tagsTag ? '/tags/' + encodeURIComponent(tagsTag) : '/tags';
-  htmx.ajax('GET', tagsUrl, {
-    target: '#tags-content',
-    swap: 'innerHTML',
-  });
-}
 
 function restoreSidebarState() {
   restoreSectionState('files');
