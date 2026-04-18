@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -14,6 +15,13 @@ import (
 	"github.com/dreikanter/notes-view/internal/logging"
 	"github.com/fsnotify/fsnotify"
 )
+
+// eventMsg is the internal envelope passed to subscribers.
+// kind is "change" (file content) or "dir-changed" (tree mutation).
+type eventMsg struct {
+	kind string
+	path string
+}
 
 type EventHub struct {
 	root    string
@@ -26,8 +34,8 @@ type EventHub struct {
 }
 
 type Subscription struct {
-	watchPath string
-	events    chan string
+	watchPath string // "" means no file-change subscription
+	events    chan eventMsg
 }
 
 func NewEventHub(root string, logger *slog.Logger, idx *index.NoteIndex) *EventHub {
@@ -49,8 +57,28 @@ func (h *EventHub) Start() error {
 		return err
 	}
 	h.watcher = watcher
+	if err := h.watchRecursive(h.root); err != nil {
+		h.logger.Warn("initial recursive watch failed", "err", err)
+	}
 	go h.eventLoop()
 	return nil
+}
+
+func (h *EventHub) watchRecursive(absDir string) error {
+	return filepath.WalkDir(absDir, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if name := d.Name(); strings.HasPrefix(name, ".") && p != absDir {
+				return filepath.SkipDir
+			}
+			if err := h.watcher.Add(p); err != nil {
+				h.logger.Warn("watcher add failed", "dir", p, "err", err)
+			}
+		}
+		return nil
+	})
 }
 
 func (h *EventHub) Stop() {
@@ -61,12 +89,16 @@ func (h *EventHub) Stop() {
 }
 
 func (h *EventHub) eventLoop() {
-	timers := make(map[string]*time.Timer)
+	changeTimers := make(map[string]*time.Timer)
+	dirTimers := make(map[string]*time.Timer)
 
 	for {
 		select {
 		case <-h.done:
-			for _, t := range timers {
+			for _, t := range changeTimers {
+				t.Stop()
+			}
+			for _, t := range dirTimers {
 				t.Stop()
 			}
 			return
@@ -74,33 +106,7 @@ func (h *EventHub) eventLoop() {
 			if !ok {
 				return
 			}
-			if event.Op&(fsnotify.Write|fsnotify.Create) == 0 {
-				continue
-			}
-			// Ignore non-.md events: editor swap/backup files (*.swp,
-			// *~, .#*, numeric temps like 4913) and any other non-note
-			// writes should not trigger index work. The .md suffix
-			// check covers all of these — no explicit pattern list
-			// needed. Editors that save-via-rename still fire a final
-			// Create/Write on the real .md path, which this catches.
-			if !strings.HasSuffix(strings.ToLower(event.Name), ".md") {
-				continue
-			}
-			// Content (frontmatter) and filenames (UIDs) can both
-			// change on Write or Create. The rebuild is scheduled
-			// inside the debounce timer below so the broadcast only
-			// fires after a build that reflects this event — clients
-			// that re-fetch on `change` always see fresh metadata.
-			p := event.Name
-			if t, ok := timers[p]; ok {
-				t.Stop()
-			}
-			timers[p] = time.AfterFunc(100*time.Millisecond, func() {
-				if h.index != nil {
-					<-h.index.Rebuild()
-				}
-				h.broadcast(p)
-			})
+			h.handleFSEvent(event, changeTimers, dirTimers)
 		case err, ok := <-h.watcher.Errors:
 			if !ok {
 				return
@@ -110,19 +116,93 @@ func (h *EventHub) eventLoop() {
 	}
 }
 
-func (h *EventHub) broadcast(absPath string) {
+func (h *EventHub) handleFSEvent(event fsnotify.Event, changeTimers, dirTimers map[string]*time.Timer) {
+	// A new subdir means we must watch it too.
+	if event.Op&fsnotify.Create != 0 {
+		if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
+			if name := filepath.Base(event.Name); !strings.HasPrefix(name, ".") {
+				if err := h.watcher.Add(event.Name); err != nil {
+					h.logger.Warn("watcher add (new dir) failed", "dir", event.Name, "err", err)
+				}
+			}
+		}
+	}
+
+	// File-content change: Write/Create on a .md file → 'change' broadcast.
+	if event.Op&(fsnotify.Write|fsnotify.Create) != 0 &&
+		strings.HasSuffix(strings.ToLower(event.Name), ".md") {
+		p := event.Name
+		if t, ok := changeTimers[p]; ok {
+			t.Stop()
+		}
+		changeTimers[p] = time.AfterFunc(100*time.Millisecond, func() {
+			if h.index != nil {
+				<-h.index.Rebuild()
+			}
+			h.broadcastChange(p)
+		})
+	}
+
+	// Dir mutation: Create/Remove/Rename on a visible entry → 'dir-changed'
+	// broadcast for the parent dir.
+	if event.Op&(fsnotify.Create|fsnotify.Remove|fsnotify.Rename) != 0 {
+		base := filepath.Base(event.Name)
+		visible := !strings.HasPrefix(base, ".")
+		if visible {
+			// On Remove/Rename the path is gone — can't Stat. Treat it as
+			// potentially visible; if the name was a non-.md file it'll be
+			// dropped by the dir-listing anyway. For Create, check Stat to
+			// filter out non-.md files.
+			if event.Op&fsnotify.Create != 0 {
+				if info, err := os.Stat(event.Name); err == nil && !info.IsDir() {
+					visible = strings.HasSuffix(strings.ToLower(base), ".md")
+				}
+			}
+		}
+		if visible {
+			parentAbs := filepath.Dir(event.Name)
+			parentRel, err := filepath.Rel(h.root, parentAbs)
+			if err == nil {
+				if parentRel == "." {
+					parentRel = ""
+				}
+				if t, ok := dirTimers[parentRel]; ok {
+					t.Stop()
+				}
+				pr := parentRel
+				dirTimers[pr] = time.AfterFunc(200*time.Millisecond, func() {
+					h.broadcastDirChanged(pr)
+				})
+			}
+		}
+	}
+}
+
+func (h *EventHub) broadcastChange(absPath string) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	for client := range h.clients {
-		safePath, err := SafePath(h.root, client.watchPath)
-		if err != nil {
+	for sub := range h.clients {
+		if sub.watchPath == "" {
 			continue
 		}
-		if safePath == absPath {
-			select {
-			case client.events <- client.watchPath:
-			default:
-			}
+		safePath, err := SafePath(h.root, sub.watchPath)
+		if err != nil || safePath != absPath {
+			continue
+		}
+		select {
+		case sub.events <- eventMsg{kind: "change", path: sub.watchPath}:
+		default:
+		}
+	}
+}
+
+func (h *EventHub) broadcastDirChanged(relPath string) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for sub := range h.clients {
+		select {
+		case sub.events <- eventMsg{kind: "dir-changed", path: relPath}:
+		default:
 		}
 	}
 }
@@ -131,43 +211,12 @@ func (h *EventHub) addClient(c *Subscription) {
 	h.mu.Lock()
 	h.clients[c] = struct{}{}
 	h.mu.Unlock()
-	if h.watcher != nil {
-		if absPath, err := SafePath(h.root, c.watchPath); err == nil {
-			// Watch the parent directory instead of the file itself.
-			// Many editors (vim, emacs, IDEs) save via write-to-temp +
-			// rename, which replaces the inode. Watching the directory
-			// ensures we see the rename/create event for the new inode.
-			h.watcher.Add(filepath.Dir(absPath))
-		}
-	}
 }
 
 func (h *EventHub) removeClient(c *Subscription) {
 	h.mu.Lock()
 	delete(h.clients, c)
-
-	// Remove the watched directory if no remaining client needs it.
-	// We check whether any other client watches a file in the same
-	// directory, not just the exact same file.
-	var dirToRemove string
-	if h.watcher != nil {
-		if absPath, err := SafePath(h.root, c.watchPath); err == nil {
-			dirToRemove = filepath.Dir(absPath)
-			for other := range h.clients {
-				if otherAbs, err := SafePath(h.root, other.watchPath); err == nil {
-					if filepath.Dir(otherAbs) == dirToRemove {
-						dirToRemove = ""
-						break
-					}
-				}
-			}
-		}
-	}
 	h.mu.Unlock()
-
-	if dirToRemove != "" {
-		h.watcher.Remove(dirToRemove)
-	}
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
@@ -178,25 +227,23 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	watchPath := r.URL.Query().Get("watch")
-	if watchPath == "" {
-		http.Error(w, "watch parameter required", http.StatusBadRequest)
-		return
-	}
-	if _, err := SafePath(s.root, watchPath); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	if watchPath != "" {
+		if _, err := SafePath(s.root, watchPath); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	client := &Subscription{
+	sub := &Subscription{
 		watchPath: watchPath,
-		events:    make(chan string, 1),
+		events:    make(chan eventMsg, 8),
 	}
-	s.events.addClient(client)
-	defer s.events.removeClient(client)
+	s.events.addClient(sub)
+	defer s.events.removeClient(sub)
 
 	fmt.Fprintf(w, "event: connected\ndata: %s\n\n", toJSON(map[string]string{"type": "connected"}))
 	flusher.Flush()
@@ -206,11 +253,18 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-ctx.Done():
 			return
-		case path := <-client.events:
-			fmt.Fprintf(w, "event: change\ndata: %s\n\n", toJSON(map[string]string{
-				"type": "change",
-				"path": path,
-			}))
+		case msg := <-sub.events:
+			switch msg.kind {
+			case "change":
+				fmt.Fprintf(w, "event: change\ndata: %s\n\n", toJSON(map[string]string{
+					"type": "change",
+					"path": msg.path,
+				}))
+			case "dir-changed":
+				fmt.Fprintf(w, "event: dir-changed\ndata: %s\n\n", toJSON(map[string]string{
+					"path": msg.path,
+				}))
+			}
 			flusher.Flush()
 		}
 	}
