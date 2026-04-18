@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { TreeView } from './tree-view.js'
 
 function makeLoader(tree) {
@@ -583,5 +583,126 @@ describe('TreeView keyboard — arrows, Home, End', () => {
     press(first, 'ArrowDown')
     const zeros = container.querySelectorAll('[role="treeitem"][tabindex="0"]')
     expect(zeros.length).toBe(1)
+  })
+})
+
+describe('TreeView keyboard — activation and typeahead', () => {
+  let container
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="host"></div>'
+    container = document.getElementById('host')
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function press(el, key) {
+    const ev = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+    el.dispatchEvent(ev)
+    return ev
+  }
+
+  it('Enter on focused node emits tree:select with source=keyboard', async () => {
+    const tv = new TreeView(container, { loader: makeLoader(nested) })
+    await tv.ready
+    const events = []
+    container.addEventListener('tree:select', (e) => events.push(e.detail))
+    const li = container.querySelector('[data-path="readme.md"]')
+    li.focus()
+    press(li, 'Enter')
+    expect(events.length).toBe(1)
+    expect(events[0].path).toBe('readme.md')
+    expect(events[0].source).toBe('keyboard')
+  })
+
+  it('Space selects like Enter and preventDefaults', async () => {
+    const tv = new TreeView(container, { loader: makeLoader(nested) })
+    await tv.ready
+    const li = container.querySelector('[data-path="readme.md"]')
+    li.focus()
+    const ev = press(li, ' ')
+    expect(ev.defaultPrevented).toBe(true)
+    expect(tv.selectedPath).toBe('readme.md')
+  })
+
+  it('typeahead focuses first matching visible node by name prefix', async () => {
+    const tv = new TreeView(container, { loader: makeLoader(nested) })
+    await tv.ready
+    const first = container.querySelector('[data-path="a"]')
+    first.focus()
+    press(first, 'r')  // matches readme.md
+    expect(tv.focusedPath).toBe('readme.md')
+  })
+
+  it('typeahead buffer accumulates and resets after idle', async () => {
+    const state = {
+      '': [
+        { name: 'alpha.md', path: 'alpha.md', isDir: false },
+        { name: 'apple.md', path: 'apple.md', isDir: false },
+      ],
+    }
+    const tv = new TreeView(container, { loader: makeLoader(state) })
+    await tv.ready
+    const first = container.querySelector('[data-path="alpha.md"]')
+    first.focus()
+    press(first, 'a')
+    press(first, 'p')  // buffer is "ap" → matches apple.md
+    expect(tv.focusedPath).toBe('apple.md')
+    vi.advanceTimersByTime(600)
+    press(first, 'a')  // buffer = "a" → matches alpha.md (first "a...")
+    expect(tv.focusedPath).toBe('alpha.md')
+  })
+})
+
+describe('TreeView mouse clicks', () => {
+  let container
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="host"></div>'
+    container = document.getElementById('host')
+  })
+
+  it('clicking the row label selects the node', async () => {
+    const tv = new TreeView(container, { loader: makeLoader(nested) })
+    await tv.ready
+    const events = []
+    container.addEventListener('tree:select', (e) => events.push(e.detail))
+    const label = container.querySelector('[data-path="readme.md"] .tv-label')
+    label.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    expect(events.length).toBe(1)
+    expect(events[0].path).toBe('readme.md')
+    expect(events[0].source).toBe('click')
+  })
+
+  it('clicking the chevron toggles without selecting', async () => {
+    const tv = new TreeView(container, { loader: makeLoader(nested) })
+    await tv.ready
+    const selectEvents = []
+    container.addEventListener('tree:select', (e) => selectEvents.push(e.detail))
+    const chev = container.querySelector('[data-path="a"] .tv-toggle')
+    chev.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(tv.expandedPaths.has('a')).toBe(true)
+    expect(selectEvents.length).toBe(0)
+  })
+
+  it('clicking the row label sets focus to the clicked node', async () => {
+    const tv = new TreeView(container, { loader: makeLoader(nested) })
+    await tv.ready
+    const label = container.querySelector('[data-path="readme.md"] .tv-label')
+    label.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    expect(tv.focusedPath).toBe('readme.md')
+  })
+
+  it('clicking the chevron does not move focus', async () => {
+    const tv = new TreeView(container, { loader: makeLoader(nested) })
+    await tv.ready
+    const firstItem = container.querySelector('[data-path="a"]')
+    firstItem.focus()
+    tv.focusedPath = 'a'
+    const chevB = container.querySelector('[data-path="b"] .tv-toggle')
+    chevB.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(tv.focusedPath).toBe('a')
   })
 })

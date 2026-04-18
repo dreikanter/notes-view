@@ -55,6 +55,11 @@ export class TreeView {
     this._onKeydown = (e) => this._handleKeydown(e)
     this.root.addEventListener('keydown', this._onKeydown)
 
+    this._typeaheadBuffer = ''
+    this._typeaheadTimer = null
+    this._onClick = (e) => this._handleClick(e)
+    this.root.addEventListener('click', this._onClick)
+
     this.ready = this._bootstrap()
   }
 
@@ -405,6 +410,7 @@ export class TreeView {
 
   destroy() {
     this.root.removeEventListener('keydown', this._onKeydown)
+    this.root.removeEventListener('click', this._onClick)
     this.container.innerHTML = ''
   }
 
@@ -420,7 +426,52 @@ export class TreeView {
       case 'ArrowLeft':  e.preventDefault(); this._arrowLeft(path, li); return
       case 'Home': e.preventDefault(); this._focusEdge('first'); return
       case 'End':  e.preventDefault(); this._focusEdge('last'); return
+      case 'Enter':
+      case ' ':
+        e.preventDefault()
+        this.select(path, { source: 'keyboard' })
+        return
     }
+
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault()
+      this._typeahead(e.key.toLowerCase())
+    }
+  }
+
+  _typeahead(ch) {
+    const isNewBuffer = this._typeaheadBuffer === ''
+    this._typeaheadBuffer += ch
+    if (this._typeaheadTimer) clearTimeout(this._typeaheadTimer)
+    this._typeaheadTimer = setTimeout(() => { this._typeaheadBuffer = '' }, 500)
+
+    const items = this._visibleItems()
+    const currentIdx = items.findIndex((it) => it.getAttribute('data-path') === this.focusedPath)
+    // For a new single-char buffer, start from the item after the focused one (cycling).
+    // For an accumulated buffer, start from the focused item itself.
+    const startIdx = isNewBuffer
+      ? (currentIdx === -1 ? 0 : (currentIdx + 1) % items.length)
+      : Math.max(0, currentIdx)
+    const ordered = items.slice(startIdx).concat(items.slice(0, startIdx))
+    for (const it of ordered) {
+      const p = it.getAttribute('data-path')
+      const node = this.nodesByPath.get(p)
+      if (node && node.name.toLowerCase().startsWith(this._typeaheadBuffer)) {
+        this._focusPath(p)
+        return
+      }
+    }
+  }
+
+  _handleClick(e) {
+    const toggle = e.target.closest(`.${this._cls('toggle')}`)
+    if (toggle) {
+      const li = toggle.closest('[role="treeitem"]')
+      if (li) this.toggle(li.getAttribute('data-path'))
+      return
+    }
+    const li = e.target.closest('[role="treeitem"]')
+    if (li) this.select(li.getAttribute('data-path'), { source: 'click' })
   }
 
   _visibleItems() {
@@ -473,5 +524,12 @@ export class TreeView {
     if (!items.length) return
     const target = which === 'first' ? items[0] : items[items.length - 1]
     this._focusPath(target.getAttribute('data-path'))
+  }
+
+  scrollTo(path, options = {}) {
+    const li = this._findItem(path)
+    if (!li) return
+    const block = options.block ?? 'center'
+    li.scrollIntoView({ block, inline: 'nearest' })
   }
 }
