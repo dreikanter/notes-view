@@ -31,16 +31,21 @@ func IsUID(s string) bool {
 // needed for today's lookups are populated for future derived maps
 // (bySlug, byAlias, byDate) without requiring a second walk.
 type NoteEntry struct {
-	RelPath     string
-	UID         string
-	Stem        string
+	// Identity.
+	RelPath string
+	UID     string
+	Stem    string
+
+	// Frontmatter-derived.
 	Slug        string
 	Title       string
 	Description string
 	Tags        []string
 	Aliases     []string
-	Date        time.Time
-	DateSource  string
+
+	// Temporal.
+	Date       time.Time
+	DateSource string
 }
 
 // NoteIndex is the unified in-memory index of the notes tree. It is safe
@@ -50,9 +55,8 @@ type NoteIndex struct {
 	root    string
 	logger  *slog.Logger
 	mu      sync.RWMutex
-	entries []NoteEntry
 	byUID   map[string]string
-	byRel   map[string]int
+	byRel   map[string]NoteEntry
 	byTag   map[string][]string
 	allTags []string
 
@@ -74,7 +78,7 @@ func New(root string, logger *slog.Logger) *NoteIndex {
 		root:   root,
 		logger: logger,
 		byUID:  make(map[string]string),
-		byRel:  make(map[string]int),
+		byRel:  make(map[string]NoteEntry),
 		byTag:  make(map[string][]string),
 	}
 }
@@ -83,9 +87,8 @@ func New(root string, logger *slog.Logger) *NoteIndex {
 // state. The swap at the end is atomic. Non-permission walk errors are
 // propagated; permission-denied directories are warned and skipped.
 func (i *NoteIndex) Build() error {
-	var entries []NoteEntry
 	byUID := make(map[string]string)
-	byRel := make(map[string]int)
+	byRel := make(map[string]NoteEntry)
 	byTag := make(map[string][]string)
 
 	err := filepath.WalkDir(i.root, func(path string, d os.DirEntry, err error) error {
@@ -129,7 +132,7 @@ func (i *NoteIndex) Build() error {
 		}
 		date, source := resolveDate(uid, fm.Date, info)
 
-		entry := NoteEntry{
+		byRel[rel] = NoteEntry{
 			RelPath:     rel,
 			UID:         uid,
 			Stem:        stem,
@@ -137,12 +140,10 @@ func (i *NoteIndex) Build() error {
 			Title:       fm.Title,
 			Description: fm.Description,
 			Tags:        tags,
-			Aliases:     append([]string(nil), fm.Aliases...),
+			Aliases:     fm.Aliases,
 			Date:        date,
 			DateSource:  source,
 		}
-		byRel[rel] = len(entries)
-		entries = append(entries, entry)
 
 		if uid != "" {
 			byUID[uid] = rel
@@ -166,7 +167,6 @@ func (i *NoteIndex) Build() error {
 	}
 
 	i.mu.Lock()
-	i.entries = entries
 	i.byUID = byUID
 	i.byRel = byRel
 	i.byTag = byTag
@@ -209,25 +209,32 @@ func (i *NoteIndex) Rebuild() <-chan struct{} {
 // runBuild executes one Build and signals done; if another Rebuild
 // request arrived during the build, it chains into the follow-up build
 // in the same goroutine lineage.
+//
+// The state-machine cleanup runs in a deferred block so that even if
+// Build panics, waiters on done are released and any queued follow-up
+// still gets scheduled — without this, an SSE timer goroutine would
+// block forever.
 func (i *NoteIndex) runBuild(done chan struct{}) {
+	defer func() {
+		i.buildMu.Lock()
+		next := i.queuedDone
+		i.queuedDone = nil
+		if next != nil {
+			i.curDone = next
+		} else {
+			i.curDone = nil
+		}
+		i.buildMu.Unlock()
+
+		close(done)
+
+		if next != nil {
+			go i.runBuild(next)
+		}
+	}()
+
 	if err := i.Build(); err != nil {
 		i.logger.Error("note index rebuild failed", "err", err)
-	}
-
-	i.buildMu.Lock()
-	next := i.queuedDone
-	i.queuedDone = nil
-	if next != nil {
-		i.curDone = next
-	} else {
-		i.curDone = nil
-	}
-	i.buildMu.Unlock()
-
-	close(done)
-
-	if next != nil {
-		go i.runBuild(next)
 	}
 }
 
@@ -247,13 +254,12 @@ func (i *NoteIndex) NoteByUID(uid string) (string, bool) {
 func (i *NoteIndex) NoteEntryByRel(rel string) (NoteEntry, bool) {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
-	idx, ok := i.byRel[rel]
+	entry, ok := i.byRel[rel]
 	if !ok {
 		return NoteEntry{}, false
 	}
-	entry := i.entries[idx]
-	entry.Tags = append([]string(nil), entry.Tags...)
-	entry.Aliases = append([]string(nil), entry.Aliases...)
+	entry.Tags = cloneStrings(entry.Tags)
+	entry.Aliases = cloneStrings(entry.Aliases)
 	return entry, true
 }
 
@@ -261,9 +267,7 @@ func (i *NoteIndex) NoteEntryByRel(rel string) (NoteEntry, bool) {
 func (i *NoteIndex) Tags() []string {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
-	out := make([]string, len(i.allTags))
-	copy(out, i.allTags)
-	return out
+	return cloneStrings(i.allTags)
 }
 
 // NotesByTag returns a copy of the sorted rel-path slice for a tag.
@@ -271,10 +275,7 @@ func (i *NoteIndex) Tags() []string {
 func (i *NoteIndex) NotesByTag(tag string) []string {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
-	paths := i.byTag[tag]
-	out := make([]string, len(paths))
-	copy(out, paths)
-	return out
+	return cloneStrings(i.byTag[tag])
 }
 
 // deriveSlug returns the normalized slug for an entry. If the frontmatter
@@ -370,6 +371,15 @@ func uidDate(uid string) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return t, true
+}
+
+// cloneStrings returns a fresh copy of s. A nil input yields a non-nil,
+// zero-length slice so callers always get a usable value — matching the
+// "unknown returns empty slice" contract in NotesByTag.
+func cloneStrings(s []string) []string {
+	out := make([]string, len(s))
+	copy(out, s)
+	return out
 }
 
 // dedupStrings returns s with duplicates removed, preserving first-seen

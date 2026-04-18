@@ -354,21 +354,6 @@ func TestNotesByTagSortedRelPaths(t *testing.T) {
 	}
 }
 
-// entryByRel is a test helper that returns the entry at rel, or fails the
-// test. Reads unexported state — tests run in package index.
-func entryByRel(t *testing.T, idx *NoteIndex, rel string) NoteEntry {
-	t.Helper()
-	idx.mu.RLock()
-	defer idx.mu.RUnlock()
-	for _, e := range idx.entries {
-		if e.RelPath == rel {
-			return e
-		}
-	}
-	t.Fatalf("no entry with RelPath %q; have %d entries", rel, len(idx.entries))
-	return NoteEntry{}
-}
-
 func TestNoteEntryTitle(t *testing.T) {
 	dir := t.TempDir()
 	mustWriteFile(t, filepath.Join(dir, "a.md"), "---\ntitle: Hello World\n---\n")
@@ -378,11 +363,13 @@ func TestNoteEntryTitle(t *testing.T) {
 	if err := idx.Build(); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if got := entryByRel(t, idx, "a.md").Title; got != "Hello World" {
-		t.Errorf("Title = %q, want Hello World", got)
+	a, _ := idx.NoteEntryByRel("a.md")
+	if a.Title != "Hello World" {
+		t.Errorf("Title = %q, want Hello World", a.Title)
 	}
-	if got := entryByRel(t, idx, "b.md").Title; got != "" {
-		t.Errorf("Title = %q, want empty", got)
+	b, _ := idx.NoteEntryByRel("b.md")
+	if b.Title != "" {
+		t.Errorf("Title = %q, want empty", b.Title)
 	}
 }
 
@@ -396,11 +383,13 @@ func TestNoteEntryDescription(t *testing.T) {
 	if err := idx.Build(); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if got := entryByRel(t, idx, "a.md").Description; got != "A short summary" {
-		t.Errorf("Description = %q, want %q", got, "A short summary")
+	a, _ := idx.NoteEntryByRel("a.md")
+	if a.Description != "A short summary" {
+		t.Errorf("Description = %q, want %q", a.Description, "A short summary")
 	}
-	if got := entryByRel(t, idx, "b.md").Description; got != "" {
-		t.Errorf("Description = %q, want empty", got)
+	b, _ := idx.NoteEntryByRel("b.md")
+	if b.Description != "" {
+		t.Errorf("Description = %q, want empty", b.Description)
 	}
 }
 
@@ -472,13 +461,13 @@ func TestNoteEntryAliases(t *testing.T) {
 	if err := idx.Build(); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	got := entryByRel(t, idx, "inline.md").Aliases
-	if len(got) != 2 || got[0] != "k8s" || got[1] != "kube" {
-		t.Errorf("inline Aliases = %v", got)
+	inline, _ := idx.NoteEntryByRel("inline.md")
+	if len(inline.Aliases) != 2 || inline.Aliases[0] != "k8s" || inline.Aliases[1] != "kube" {
+		t.Errorf("inline Aliases = %v", inline.Aliases)
 	}
-	got = entryByRel(t, idx, "block.md").Aliases
-	if len(got) != 2 || got[0] != "one" || got[1] != "two" {
-		t.Errorf("block Aliases = %v", got)
+	block, _ := idx.NoteEntryByRel("block.md")
+	if len(block.Aliases) != 2 || block.Aliases[0] != "one" || block.Aliases[1] != "two" {
+		t.Errorf("block Aliases = %v", block.Aliases)
 	}
 }
 
@@ -491,8 +480,9 @@ func TestNoteEntrySlugFromFrontmatter(t *testing.T) {
 	if err := idx.Build(); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if got := entryByRel(t, idx, "a.md").Slug; got != "my-awesome-note" {
-		t.Errorf("Slug = %q, want my-awesome-note", got)
+	a, _ := idx.NoteEntryByRel("a.md")
+	if a.Slug != "my-awesome-note" {
+		t.Errorf("Slug = %q, want my-awesome-note", a.Slug)
 	}
 }
 
@@ -506,16 +496,19 @@ func TestNoteEntrySlugDerivedFromStem(t *testing.T) {
 	if err := idx.Build(); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if got := entryByRel(t, idx, "20260331_9201_weekly_digest.md").Slug; got != "weekly-digest" {
-		t.Errorf("Slug = %q, want weekly-digest", got)
+	weekly, _ := idx.NoteEntryByRel("20260331_9201_weekly_digest.md")
+	if weekly.Slug != "weekly-digest" {
+		t.Errorf("Slug = %q, want weekly-digest", weekly.Slug)
 	}
 	// Bare UID filename → empty slug.
-	if got := entryByRel(t, idx, "20260331_9202.md").Slug; got != "" {
-		t.Errorf("Slug = %q, want empty", got)
+	bare, _ := idx.NoteEntryByRel("20260331_9202.md")
+	if bare.Slug != "" {
+		t.Errorf("Slug = %q, want empty", bare.Slug)
 	}
 	// Non-UID filename → normalized stem.
-	if got := entryByRel(t, idx, "README.md").Slug; got != "readme" {
-		t.Errorf("Slug = %q, want readme", got)
+	readme, _ := idx.NoteEntryByRel("README.md")
+	if readme.Slug != "readme" {
+		t.Errorf("Slug = %q, want readme", readme.Slug)
 	}
 }
 
@@ -527,7 +520,7 @@ func TestNoteEntryDateFromUID(t *testing.T) {
 	if err := idx.Build(); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	e := entryByRel(t, idx, "20260331_9201.md")
+	e, _ := idx.NoteEntryByRel("20260331_9201.md")
 	if e.DateSource != "uid" {
 		t.Errorf("DateSource = %q, want uid", e.DateSource)
 	}
@@ -544,7 +537,7 @@ func TestNoteEntryDateFromFrontmatterWhenNoUID(t *testing.T) {
 	if err := idx.Build(); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	e := entryByRel(t, idx, "README.md")
+	e, _ := idx.NoteEntryByRel("README.md")
 	if e.DateSource != "frontmatter" {
 		t.Errorf("DateSource = %q, want frontmatter", e.DateSource)
 	}
@@ -568,7 +561,7 @@ func TestNoteEntryDateFromMtimeWhenNoUIDAndNoFrontmatterDate(t *testing.T) {
 	if err := idx.Build(); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	e := entryByRel(t, idx, "plain.md")
+	e, _ := idx.NoteEntryByRel("plain.md")
 	if e.DateSource != "mtime" {
 		t.Errorf("DateSource = %q, want mtime", e.DateSource)
 	}
@@ -587,7 +580,7 @@ func TestNoteEntryDateUIDInvalidFallsThrough(t *testing.T) {
 	if err := idx.Build(); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	e := entryByRel(t, idx, "20269931_0001.md")
+	e, _ := idx.NoteEntryByRel("20269931_0001.md")
 	if e.DateSource != "frontmatter" {
 		t.Errorf("DateSource = %q, want frontmatter (UID date invalid)", e.DateSource)
 	}
@@ -611,7 +604,7 @@ func TestMalformedFrontmatterDoesNotFailBuild(t *testing.T) {
 		t.Error("sibling UID entry should still be indexed")
 	}
 	// The malformed file is still recorded as an entry (no UID, no tags).
-	e := entryByRel(t, idx, "bad.md")
+	e, _ := idx.NoteEntryByRel("bad.md")
 	if len(e.Tags) != 0 {
 		t.Errorf("bad.md tags = %v, want none", e.Tags)
 	}
