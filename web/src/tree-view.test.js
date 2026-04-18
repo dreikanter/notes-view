@@ -242,3 +242,94 @@ describe('TreeView select', () => {
     expect(first.getAttribute('tabindex')).toBe('0')
   })
 })
+
+describe('TreeView refresh / reconciliation', () => {
+  let container
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="host"></div>'
+    container = document.getElementById('host')
+  })
+
+  it('refresh adds new children from loader', async () => {
+    const state = { '': [{ name: 'a.md', path: 'a.md', isDir: false }] }
+    const loader = vi.fn(async (p) => (state[p] || []).slice())
+    const tv = new TreeView(container, { loader })
+    await tv.ready
+    state[''].push({ name: 'b.md', path: 'b.md', isDir: false })
+    await tv.refresh('')
+    expect(container.querySelector('[data-path="b.md"]')).toBeTruthy()
+  })
+
+  it('refresh removes deleted children and drops their model', async () => {
+    const state = {
+      '': [{ name: 'x.md', path: 'x.md', isDir: false }, { name: 'y.md', path: 'y.md', isDir: false }],
+    }
+    const loader = vi.fn(async (p) => (state[p] || []).slice())
+    const tv = new TreeView(container, { loader })
+    await tv.ready
+    state[''] = [{ name: 'x.md', path: 'x.md', isDir: false }]
+    await tv.refresh('')
+    expect(container.querySelector('[data-path="y.md"]')).toBeNull()
+    expect(tv.nodesByPath.has('y.md')).toBe(false)
+  })
+
+  it('refresh preserves unchanged-and-expanded descendants', async () => {
+    const state = {
+      '': [
+        { name: 'a', path: 'a', isDir: true },
+        { name: 'b', path: 'b', isDir: true },
+      ],
+      'a': [{ name: 'a.md', path: 'a/a.md', isDir: false }],
+      'b': [{ name: 'b.md', path: 'b/b.md', isDir: false }],
+    }
+    const loader = vi.fn(async (p) => (state[p] || []).slice())
+    const tv = new TreeView(container, { loader })
+    await tv.ready
+    await tv.expand('a')
+    await tv.expand('b')
+
+    state[''].unshift({ name: 'c', path: 'c', isDir: true })
+    state['c'] = []
+    await tv.refresh('')
+
+    expect(container.querySelector('[data-path="c"]')).toBeTruthy()
+    expect(container.querySelector('[data-path="a/a.md"]')).toBeTruthy()
+    expect(container.querySelector('[data-path="b/b.md"]')).toBeTruthy()
+    expect(tv.expandedPaths.has('a')).toBe(true)
+    expect(tv.expandedPaths.has('b')).toBe(true)
+  })
+
+  it('refresh clears selection if selected node is removed', async () => {
+    const state = {
+      '': [
+        { name: 'x.md', path: 'x.md', isDir: false },
+        { name: 'y.md', path: 'y.md', isDir: false },
+      ],
+    }
+    const loader = vi.fn(async (p) => (state[p] || []).slice())
+    const tv = new TreeView(container, { loader })
+    await tv.ready
+    tv.select('y.md')
+    const events = []
+    container.addEventListener('tree:select', (e) => events.push(e.detail))
+    state[''] = [{ name: 'x.md', path: 'x.md', isDir: false }]
+    await tv.refresh('')
+    expect(tv.selectedPath).toBeNull()
+    expect(events.some((e) => e.path === null)).toBe(true)
+  })
+
+  it('refresh replaces a node whose isDir flipped', async () => {
+    const state = { '': [{ name: 'thing', path: 'thing', isDir: true }], 'thing': [] }
+    const loader = vi.fn(async (p) => (state[p] || []).slice())
+    const tv = new TreeView(container, { loader })
+    await tv.ready
+    await tv.expand('thing')
+    expect(tv.expandedPaths.has('thing')).toBe(true)
+
+    state[''] = [{ name: 'thing', path: 'thing', isDir: false }]
+    await tv.refresh('')
+    const row = container.querySelector('[data-path="thing"]')
+    expect(row.classList.contains('tv-item--file')).toBe(true)
+    expect(tv.expandedPaths.has('thing')).toBe(false)
+  })
+})

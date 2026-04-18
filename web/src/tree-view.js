@@ -174,6 +174,88 @@ export class TreeView {
     this.container.dispatchEvent(new CustomEvent('tree:toggle', { detail: { path, expanded: true } }))
   }
 
+  async refresh(path) {
+    if (path !== this.rootPath && !this.expandedPaths.has(path)) return
+    if (this.loadingPaths.has(path)) {
+      this.loadingPaths.get(path).pendingRefresh = true
+      return this.loadingPaths.get(path).promise
+    }
+
+    let nodes
+    try {
+      nodes = await this.loader(path)
+    } catch (err) {
+      this.container.dispatchEvent(new CustomEvent('tree:error', { detail: { path, error: err } }))
+      return
+    }
+
+    this._reconcile(path, nodes)
+  }
+
+  _reconcile(parentPath, nextNodes) {
+    const prev = this.childrenByPath.get(parentPath) ?? []
+    const next = nextNodes.map((n) => n.path)
+    const nextSet = new Set(next)
+    const prevSet = new Set(prev)
+
+    for (const p of prev) {
+      if (!nextSet.has(p)) this._removeSubtree(p)
+    }
+
+    for (const n of nextNodes) {
+      const existing = this.nodesByPath.get(n.path)
+      if (existing && existing.isDir !== n.isDir) {
+        this._removeSubtree(n.path)
+      }
+    }
+
+    const parentUl = this._childUl(parentPath)
+    if (!parentUl) return
+
+    const level = parentPath === this.rootPath
+      ? 1
+      : Number(this._findItem(parentPath).getAttribute('aria-level')) + 1
+
+    let cursor = null
+    for (const node of nextNodes) {
+      let li = this._findItem(node.path)
+      const isNew = !li || !prevSet.has(node.path)
+      if (isNew) {
+        li = this._buildItem(node, level)
+      }
+      this.nodesByPath.set(node.path, node)
+      if (cursor === null) {
+        parentUl.insertBefore(li, parentUl.firstChild)
+      } else {
+        cursor.after(li)
+      }
+      cursor = li
+    }
+
+    this.childrenByPath.set(parentPath, next)
+
+    if (this.selectedPath && !this._findItem(this.selectedPath)) {
+      this.selectedPath = null
+      this.focusedPath = null
+      this._updateRovingTabindex()
+      this.container.dispatchEvent(new CustomEvent('tree:select', {
+        detail: { path: null, node: null, source: 'api' },
+      }))
+    } else {
+      this._updateRovingTabindex()
+    }
+  }
+
+  _removeSubtree(path) {
+    const descendants = this.childrenByPath.get(path) ?? []
+    for (const d of descendants) this._removeSubtree(d)
+    this.childrenByPath.delete(path)
+    this.expandedPaths.delete(path)
+    this.nodesByPath.delete(path)
+    const li = this._findItem(path)
+    if (li) li.remove()
+  }
+
   // Returns the direct-child <ul class="<prefix>group"> for `path`, or null.
   // Implemented without `:scope` because happy-dom (our test environment)
   // does not support it.
