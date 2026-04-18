@@ -183,6 +183,17 @@ describe('TreeView expand/collapse', () => {
     await tv.expand('a')
     expect(tv.loadingPaths.size).toBe(0)
   })
+
+  it('chevron text flips between ▸ and ▾ on expand/collapse', async () => {
+    const tv = new TreeView(container, { loader: makeLoader(nested) })
+    await tv.ready
+    const toggle = container.querySelector('[data-path="a"] .tv-toggle')
+    expect(toggle.textContent).toBe('\u25B8')
+    await tv.expand('a')
+    expect(toggle.textContent).toBe('\u25BE')
+    tv.collapse('a')
+    expect(toggle.textContent).toBe('\u25B8')
+  })
 })
 
 describe('TreeView select', () => {

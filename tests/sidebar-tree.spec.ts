@@ -161,4 +161,27 @@ test.describe('Sidebar Tree (client-side TreeView)', () => {
     // Main pane should reload to show README content
     await expect(page.locator('#note-card')).toContainText('Welcome')
   })
+
+  test('clicking a directory row also expands it in the tree', async ({ page }) => {
+    await page.goto('/view/README.md')
+    await page.click('#sidebar-toggle')
+    const tree = page.locator('#sidebar-tree')
+    const journal = tree.locator('[data-path="journal"]')
+    await expect(journal).toHaveAttribute('aria-expanded', 'false')
+    await tree.locator('[data-path="journal"] .tv-label').click()
+    await expect(journal).toHaveAttribute('aria-expanded', 'true')
+    await expect(tree.locator('[data-path="journal/day-one.md"]')).toBeVisible()
+    // URL also navigated to the dir listing
+    await expect(page).toHaveURL(/\/dir\/journal/)
+  })
+
+  test('keyboard Enter on a focused dir expands it', async ({ page }) => {
+    await page.goto('/view/README.md')
+    await page.click('#sidebar-toggle')
+    const tree = page.locator('#sidebar-tree')
+    const journal = tree.locator('[data-path="journal"]')
+    await journal.focus()
+    await page.keyboard.press('Enter')
+    await expect(journal).toHaveAttribute('aria-expanded', 'true')
+  })
 })

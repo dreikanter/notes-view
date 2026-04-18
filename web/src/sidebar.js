@@ -90,6 +90,7 @@ export function mountSidebar() {
     })
     history.pushState({ type: node.isDir ? 'dir' : 'note', href }, '', href)
     openEventSource(node.isDir ? '' : path)
+    if (node.isDir) tree.expand(path)
   })
 
   window.addEventListener('popstate', async () => {

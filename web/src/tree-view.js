@@ -203,6 +203,7 @@ export class TreeView {
     const level = Number(li.getAttribute('aria-level'))
     this._renderChildren(path, li, nodes, level)
     li.setAttribute('aria-expanded', 'true')
+    this._setChevron(li, true)
     this.expandedPaths.add(path)
     this.container.dispatchEvent(new CustomEvent('tree:toggle', { detail: { path, expanded: true } }))
     this._writeStorage()
@@ -309,6 +310,18 @@ export class TreeView {
     return null
   }
 
+  _setChevron(li, expanded) {
+    const row = li.children[0]
+    if (!row) return
+    const toggleCls = this._cls('toggle')
+    for (const child of row.children) {
+      if (child.classList && child.classList.contains(toggleCls)) {
+        child.textContent = expanded ? '\u25BE' : '\u25B8'
+        return
+      }
+    }
+  }
+
   collapse(path) {
     if (!this.expandedPaths.has(path)) return
     const li = this._findItem(path)
@@ -316,6 +329,7 @@ export class TreeView {
     const childUl = this._childUl(path)
     if (childUl) childUl.remove()
     li.setAttribute('aria-expanded', 'false')
+    this._setChevron(li, false)
     this.expandedPaths.delete(path)
     this.container.dispatchEvent(new CustomEvent('tree:toggle', { detail: { path, expanded: false } }))
     this._writeStorage()
