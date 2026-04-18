@@ -99,7 +99,10 @@ function clearSelected() {
 function markSelected(selector) {
   clearSelected();
   var el = document.querySelector(selector);
-  if (el) el.classList.add('selected', 'bg-blue-100', 'border-blue-300', 'text-blue-700');
+  if (el) {
+    el.classList.add('selected', 'bg-blue-100', 'border-blue-300', 'text-blue-700');
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
 }
 
 // --- Directory navigation ---
