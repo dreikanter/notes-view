@@ -4,7 +4,7 @@
 
 **Goal:** When a note is selected (from any source), scroll the sidebar so the highlighted entry is visible inside the sidebar's viewport.
 
-**Architecture:** Extend the existing `markSelected` helper in `web/src/app.js` so that, after applying highlight classes to the matching sidebar entry, it also calls `scrollIntoView({ block: 'nearest', inline: 'nearest' })`. All other behavior (timing, re-swaps, element lookup) stays the same. No server, template, CSS, or test changes.
+**Architecture:** Extend the existing `markSelected` helper in `web/src/app.js` so that, after applying highlight classes, it delegates to a new `scrollSelectedIntoView` helper. That helper compares the entry's `getBoundingClientRect()` against `#sidebar`'s rect; if the entry is already fully visible it returns early, otherwise it calls `scrollIntoView({ block: 'center', inline: 'nearest' })`. All other behavior (timing, re-swaps, element lookup) stays the same. No server, template, CSS, or test changes.
 
 **Tech Stack:** Vanilla JS + HTMX, Vite build, Playwright E2E (regression only).
 
@@ -69,14 +69,27 @@ function markSelected(selector) {
   var el = document.querySelector(selector);
   if (el) {
     el.classList.add('selected', 'bg-blue-100', 'border-blue-300', 'text-blue-700');
-    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    scrollSelectedIntoView(el);
   }
+}
+
+// Center the selected entry in the sidebar viewport, but only when it is
+// not already fully visible. 'center' is not idempotent on its own, so the
+// visibility guard prevents re-swaps from shifting the sidebar on every
+// htmx:afterSwap.
+function scrollSelectedIntoView(el) {
+  var sidebar = el.closest('#sidebar');
+  if (!sidebar) return;
+  var rect = el.getBoundingClientRect();
+  var sidebarRect = sidebar.getBoundingClientRect();
+  if (rect.top >= sidebarRect.top && rect.bottom <= sidebarRect.bottom) return;
+  el.scrollIntoView({ block: 'center', inline: 'nearest' });
 }
 ```
 
-Why `block: 'nearest'`:
-- When the selected entry is already visible inside `#sidebar` (which has `overflow-y-auto`), `'nearest'` makes the call a no-op — no jitter when multiple `htmx:afterSwap` events fire for one navigation.
-- When the entry is off-screen, the sidebar scrolls the minimum amount needed to reveal it.
+Why center + visibility guard:
+- `block: 'center'` places the selected entry in the vertical middle of the sidebar's scroll viewport, giving useful context above and below when the list is long. It's chosen over `'nearest'` (which only moves the minimum amount needed) because for long lists "just revealed at the edge" still leaves the entry harder to find at a glance.
+- `'center'` is NOT idempotent — on its own, it would re-center the viewport on every `htmx:afterSwap`, producing visible jitter. The `getBoundingClientRect` comparison against `#sidebar`'s rect is the fix: if the entry is already fully visible, we skip `scrollIntoView` entirely.
 - `inline: 'nearest'` prevents any accidental horizontal scroll in edge cases.
 
 Why this seam:

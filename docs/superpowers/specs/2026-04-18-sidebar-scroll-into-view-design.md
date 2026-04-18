@@ -16,7 +16,7 @@ This spec covers a minimal, single-file front-end change that scrolls the select
 
 - Animating the scroll (native behavior is sufficient).
 - Restoring sidebar scroll position across page loads.
-- Centering the selection in the viewport. "Nearest" is the desired behavior — we only move the viewport if the element is currently outside it.
+- Scrolling when the selected entry is already fully visible in the sidebar. If it's visible, we leave the viewport alone — we only move it when the entry is off-screen.
 
 ## Current Behavior (as of commit `d98dbe2`)
 
@@ -29,11 +29,12 @@ This spec covers a minimal, single-file front-end change that scrolls the select
 
 ### Change summary
 
-Extend `markSelected` in `web/src/app.js` so that, immediately after adding the highlight classes, it calls:
+Extend `markSelected` in `web/src/app.js` so that, immediately after adding the highlight classes, it calls a small helper `scrollSelectedIntoView(el)` that:
 
-```js
-el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-```
+1. Looks up the nearest `#sidebar` ancestor.
+2. Compares the entry's `getBoundingClientRect()` against the sidebar's rect.
+3. If the entry is fully within the sidebar's visible area, returns early (no-op).
+4. Otherwise calls `el.scrollIntoView({ block: 'center', inline: 'nearest' })` to center the entry vertically in the sidebar viewport.
 
 That is the entire behavioral change. No other files are touched.
 
@@ -43,15 +44,19 @@ That is the entire behavioral change. No other files are touched.
 - The existing `htmx:afterSwap` handler already owns the timing: it defers `markSelected` via `setTimeout(0)` until the new subtree has been inserted. Adding the scroll call inside `markSelected` inherits that timing for free.
 - Putting the scroll in any other location (e.g., directly in `selectNote`) would miss the cases where the element is only created after a subsequent swap.
 
+### Why center + visibility guard
+
+`scrollIntoView({ block: 'center' })` places the element in the vertical middle of its nearest scrollable ancestor, which surfaces useful context above and below the selection when the sidebar is long. However, `'center'` is **not** idempotent — called on an already-visible element, it still re-centers the viewport, which would produce visible jitter on every `htmx:afterSwap`.
+
+The explicit rect comparison restores idempotency: when the entry is already fully visible inside the sidebar (`rect.top >= sidebarRect.top && rect.bottom <= sidebarRect.bottom`), we skip the scroll. Only when the entry is partly or fully off-screen do we actually move the viewport. This gives "center when needed, otherwise leave alone" behavior.
+
 ### Idempotency and jitter
 
 Each note navigation can fire two `htmx:afterSwap` events — one for `#note-pane` and one for `#files-content`. Their order depends on server response timing, so `markSelected` may run twice in either order.
 
-`scrollIntoView({ block: 'nearest' })` is a no-op when the element is already inside the visible area of its nearest scrollable ancestor. So regardless of order:
-
 - If `markSelected` runs before the matching sidebar entry exists, `querySelector` returns `null` and the existing `if (el)` guard short-circuits — no highlight, no scroll.
-- Once the sidebar swap completes and `markSelected` runs again, the element exists and scrolls into view (if it wasn't already visible).
-- Any subsequent run with the element already in view is a no-op — no double-scroll, no jitter.
+- Once the sidebar swap completes and `markSelected` runs again, the visibility check in `scrollSelectedIntoView` decides whether to center-scroll.
+- On any subsequent run where the entry is already fully visible, the helper returns early — no double-scroll, no jitter.
 
 ### Scroll scope
 
@@ -69,11 +74,12 @@ The selected entry is already discoverable via `[data-entry-href="..."]`. No add
 
 ## Alternatives Considered
 
-1. **Manual `sidebar.scrollTop = el.offsetTop - sidebar.offsetTop` calculation.** Reimplements browser-native logic; handles padding and sticky headers poorly; more code for no gain.
-2. **Dedicated scroll helper wired only to sidebar swaps.** Adds an extra event binding and duplicates the selector logic already inside `markSelected`. `block: 'nearest'` makes the call safe to run everywhere, so the extra indirection is unjustified.
-3. **Server-side signal (out-of-band swap with `hx-swap-oob` that carries a "focus me" marker).** Heavier than needed for a UI-only concern and couples presentation to server templates.
+1. **`block: 'nearest'` with no visibility check.** Idempotent for free, but when the entry IS off-screen it only scrolls the minimum amount to reveal it — leaving the entry pinned to the top or bottom edge of the sidebar with no surrounding context. Worse UX for long lists than center-on-demand.
+2. **`block: 'center'` with no visibility check.** Simplest code, best final position, but re-centers on every `htmx:afterSwap` even when the entry is already visible — causes jitter.
+3. **`Element.scrollIntoViewIfNeeded({ centerIfNeeded: true })`.** Non-standard; implemented in WebKit/Chromium but not Firefox. Not portable.
+4. **Server-side signal (out-of-band swap with `hx-swap-oob` that carries a "focus me" marker).** Heavier than needed for a UI-only concern and couples presentation to server templates.
 
-The direct change inside `markSelected` is chosen because it is the smallest code change that satisfies the requirement at the correct seam.
+The rect-comparison guard + `block: 'center'` combo is chosen because it gives the best-positioned scroll when needed, stays fully no-op when the entry is already visible, and uses only standard APIs.
 
 ## Testing
 
