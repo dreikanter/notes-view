@@ -1,4 +1,4 @@
-.PHONY: build test lint clean assets assets-watch all install update
+.PHONY: build test test-unit lint clean assets assets-watch all install update
 
 BINARY := notesview
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -9,7 +9,10 @@ all: assets build
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/$(BINARY)
 
-test:
+test-unit:
+	npm run test:unit
+
+test: test-unit
 	go test ./...
 
 lint:

@@ -71,7 +71,6 @@ type DirListingData struct {
 
 type templateSet struct {
 	view       *template.Template
-	sidebar    *template.Template
 	note       *template.Template
 	dirListing *template.Template
 }
@@ -90,10 +89,6 @@ func loadTemplates() (*templateSet, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse view template: %w", err)
 	}
-	sidebar, err := parsePartial("sidebar_body")
-	if err != nil {
-		return nil, fmt.Errorf("parse sidebar partial: %w", err)
-	}
 	note, err := parsePartial("note_pane_body")
 	if err != nil {
 		return nil, fmt.Errorf("parse note-pane partial: %w", err)
@@ -102,7 +97,7 @@ func loadTemplates() (*templateSet, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse dir-listing partial: %w", err)
 	}
-	return &templateSet{view: view, sidebar: sidebar, note: note, dirListing: dirListing}, nil
+	return &templateSet{view: view, note: note, dirListing: dirListing}, nil
 }
 
 func parsePage(page string) (*template.Template, error) {
@@ -124,10 +119,6 @@ func (t *templateSet) renderView(w io.Writer, data ViewData) error {
 
 func (t *templateSet) renderNotePartial(w io.Writer, data NotePartialData) error {
 	return t.note.ExecuteTemplate(w, "note_pane_body", data)
-}
-
-func (t *templateSet) renderSidebarPartial(w io.Writer, data SidebarPartialData) error {
-	return t.sidebar.ExecuteTemplate(w, "sidebar_body", data)
 }
 
 func (t *templateSet) renderDirListing(w io.Writer, data DirListingData) error {

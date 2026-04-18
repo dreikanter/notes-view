@@ -24,13 +24,14 @@ type eventMsg struct {
 }
 
 type EventHub struct {
-	root    string
-	logger  *slog.Logger
-	index   *index.NoteIndex
-	mu      sync.RWMutex
-	clients map[*Subscription]struct{}
-	watcher *fsnotify.Watcher
-	done    chan struct{}
+	root     string
+	logger   *slog.Logger
+	index    *index.NoteIndex
+	mu       sync.RWMutex
+	timerMu  sync.Mutex
+	clients  map[*Subscription]struct{}
+	watcher  *fsnotify.Watcher
+	done     chan struct{}
 }
 
 type Subscription struct {
@@ -95,12 +96,14 @@ func (h *EventHub) eventLoop() {
 	for {
 		select {
 		case <-h.done:
+			h.timerMu.Lock()
 			for _, t := range changeTimers {
 				t.Stop()
 			}
 			for _, t := range dirTimers {
 				t.Stop()
 			}
+			h.timerMu.Unlock()
 			return
 		case event, ok := <-h.watcher.Events:
 			if !ok {
@@ -132,15 +135,20 @@ func (h *EventHub) handleFSEvent(event fsnotify.Event, changeTimers, dirTimers m
 	if event.Op&(fsnotify.Write|fsnotify.Create) != 0 &&
 		strings.HasSuffix(strings.ToLower(event.Name), ".md") {
 		p := event.Name
+		h.timerMu.Lock()
 		if t, ok := changeTimers[p]; ok {
 			t.Stop()
 		}
 		changeTimers[p] = time.AfterFunc(100*time.Millisecond, func() {
+			h.timerMu.Lock()
+			delete(changeTimers, p)
+			h.timerMu.Unlock()
 			if h.index != nil {
 				<-h.index.Rebuild()
 			}
 			h.broadcastChange(p)
 		})
+		h.timerMu.Unlock()
 	}
 
 	// Dir mutation: Create/Remove/Rename on a visible entry → 'dir-changed'
@@ -166,13 +174,18 @@ func (h *EventHub) handleFSEvent(event fsnotify.Event, changeTimers, dirTimers m
 				if parentRel == "." {
 					parentRel = ""
 				}
-				if t, ok := dirTimers[parentRel]; ok {
+				pr := parentRel
+				h.timerMu.Lock()
+				if t, ok := dirTimers[pr]; ok {
 					t.Stop()
 				}
-				pr := parentRel
 				dirTimers[pr] = time.AfterFunc(200*time.Millisecond, func() {
+					h.timerMu.Lock()
+					delete(dirTimers, pr)
+					h.timerMu.Unlock()
 					h.broadcastDirChanged(pr)
 				})
+				h.timerMu.Unlock()
 			}
 		}
 	}

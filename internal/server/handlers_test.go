@@ -43,9 +43,6 @@ func TestViewHandler(t *testing.T) {
 	if !strings.Contains(body, ">todo<") || !strings.Contains(body, ">daily<") {
 		t.Errorf("expected frontmatter tags in body")
 	}
-	if !strings.Contains(body, `sse-connect="/events?watch=2026%2F03%2F20260331_9201_todo.md"`) {
-		t.Errorf("expected sse-connect for file, got: %s", body)
-	}
 	if !strings.Contains(body, `id="sidebar"`) {
 		t.Errorf("expected #sidebar element in layout, got: %s", body)
 	}

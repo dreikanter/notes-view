@@ -51,6 +51,33 @@ export function mountSidebar() {
     persistKey: 'notesview.tree',
   })
 
+  // One EventSource per page, reopened whenever the watched note path changes.
+  // Emits 'dir-changed' for tree mutations and 'change' for the current note's
+  // content updates.
+  let es = null
+  let watchedNote = null
+  const openEventSource = (notePath) => {
+    if (es) es.close()
+    watchedNote = notePath || null
+    const esURL = '/events' + (notePath ? '?watch=' + encodeURIComponent(notePath) : '')
+    es = new EventSource(esURL)
+    es.addEventListener('dir-changed', (e) => {
+      try {
+        const { path } = JSON.parse(e.data)
+        tree.refresh(path)
+      } catch {}
+    })
+    es.addEventListener('change', () => {
+      if (!watchedNote) return
+      htmx.ajax('GET', '/view/' + encodePath(watchedNote), {
+        target: '#note-pane',
+        swap: 'innerHTML',
+        headers: { 'HX-Target': 'note-pane' },
+      })
+    })
+  }
+  openEventSource(document.body.getAttribute('data-note-path') || '')
+
   container.addEventListener('tree:select', (e) => {
     const { path, node } = e.detail
     if (!path || !node) return
@@ -61,34 +88,24 @@ export function mountSidebar() {
       headers: { 'HX-Target': 'note-pane' },
     })
     history.pushState({ type: node.isDir ? 'dir' : 'note', href }, '', href)
-  })
-
-  const notePath = document.body.getAttribute('data-note-path') || ''
-  const esURL = '/events' + (notePath ? '?watch=' + encodeURIComponent(notePath) : '')
-  const es = new EventSource(esURL)
-  es.addEventListener('dir-changed', (e) => {
-    try {
-      const { path } = JSON.parse(e.data)
-      tree.refresh(path)
-    } catch {}
+    openEventSource(node.isDir ? '' : path)
   })
 
   window.addEventListener('popstate', async () => {
     const path = pathFromURL(location.pathname)
     if (!path) return
-    // Reload content in the main pane to match the new URL.
     htmx.ajax('GET', location.pathname, {
       target: '#note-pane',
       swap: 'innerHTML',
       headers: { 'HX-Target': 'note-pane' },
     })
-    // Sync the tree to the new selection without emitting tree:select
-    // (which would trigger another htmx call and a duplicate pushState).
     for (const a of ancestorsOf(path)) {
       try { await tree.expand(a) } catch {}
     }
     tree.select(path, { source: 'silent' })
     tree.scrollTo(path)
+    const isNote = location.pathname.startsWith('/view/')
+    openEventSource(isNote ? path : '')
   })
 
   return tree
