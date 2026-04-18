@@ -166,6 +166,11 @@ window.selectNote = function(href, skipPush) {
   // Push browser URL
   if (!skipPush) history.pushState({ type: 'note', href: href }, '', href);
 
+  // Reset scroll on user-initiated note switch. SSE-driven swaps of the
+  // same note go through htmx:afterSwap directly and preserve scroll.
+  var pane = document.getElementById('note-pane');
+  if (pane) pane.scrollTop = 0;
+
   // Load note in main panel
   htmx.ajax('GET', href, {
     target: '#note-pane',
