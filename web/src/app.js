@@ -160,16 +160,19 @@ window.selectTag = function(tag, skipPush) {
 
 // --- Note navigation ---
 
+var pendingNoteScrollReset = false;
+
 window.selectNote = function(href, skipPush) {
   setLS('selected', href);
 
   // Push browser URL
   if (!skipPush) history.pushState({ type: 'note', href: href }, '', href);
 
-  // Reset scroll on user-initiated note switch. SSE-driven swaps of the
-  // same note go through htmx:afterSwap directly and preserve scroll.
-  var pane = document.getElementById('note-pane');
-  if (pane) pane.scrollTop = 0;
+  // Flag a scroll reset for the upcoming #note-pane swap. The reset runs
+  // in htmx:afterSwap so it lands in the same paint as the new content —
+  // resetting before the swap causes a visible jump on the old note.
+  // SSE-driven same-note swaps do not set the flag and preserve scroll.
+  pendingNoteScrollReset = true;
 
   // Load note in main panel
   htmx.ajax('GET', href, {
@@ -270,6 +273,11 @@ document.addEventListener('click', function(e) {
 
 document.body.addEventListener('htmx:afterSwap', function(e) {
   highlightIn(e.target);
+
+  if (pendingNoteScrollReset && e.target && e.target.id === 'note-pane') {
+    e.target.scrollTop = 0;
+    pendingNoteScrollReset = false;
+  }
 
   // Re-apply selection highlight after any swap
   var selected = getLS('selected', '');
