@@ -130,6 +130,63 @@ export class TreeView {
     return li
   }
 
+  async expand(path) {
+    if (this.expandedPaths.has(path)) return
+    if (this.loadingPaths.has(path)) return this.loadingPaths.get(path).promise
+
+    const li = this._findItem(path)
+    if (!li || !li.classList.contains(this._cls('item--dir'))) return
+
+    const entry = { pendingRefresh: false }
+    const promise = this._doExpand(path, li, entry)
+    entry.promise = promise
+    this.loadingPaths.set(path, entry)
+
+    try {
+      await promise
+    } finally {
+      this.loadingPaths.delete(path)
+      if (entry.pendingRefresh && this.expandedPaths.has(path)) {
+        this.refresh(path)
+      }
+    }
+  }
+
+  async _doExpand(path, li, entry) {
+    let nodes
+    try {
+      nodes = this.childrenByPath.has(path)
+        ? this.childrenByPath.get(path).map((p) => this.nodesByPath.get(p)).filter(Boolean)
+        : await this._loadChildren(path)
+    } catch (err) {
+      this.container.dispatchEvent(new CustomEvent('tree:error', { detail: { path, error: err } }))
+      throw err
+    }
+    const level = Number(li.getAttribute('aria-level'))
+    this._renderChildren(path, li, nodes, level)
+    li.setAttribute('aria-expanded', 'true')
+    this.expandedPaths.add(path)
+    this.container.dispatchEvent(new CustomEvent('tree:toggle', { detail: { path, expanded: true } }))
+  }
+
+  collapse(path) {
+    if (!this.expandedPaths.has(path)) return
+    const li = this._findItem(path)
+    if (!li) return
+    const groupCls = this._cls('group')
+    const childUl = Array.from(li.children).find(
+      (el) => el.tagName === 'UL' && el.classList.contains(groupCls),
+    )
+    if (childUl) childUl.remove()
+    li.setAttribute('aria-expanded', 'false')
+    this.expandedPaths.delete(path)
+    this.container.dispatchEvent(new CustomEvent('tree:toggle', { detail: { path, expanded: false } }))
+  }
+
+  toggle(path) {
+    return this.expandedPaths.has(path) ? this.collapse(path) : this.expand(path)
+  }
+
   _findItem(path) {
     return this.root.querySelector(`[data-path="${escapeSelector(path)}"]`)
   }

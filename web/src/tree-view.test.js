@@ -62,3 +62,114 @@ describe('TreeView construction', () => {
     expect(item.classList.contains('x-item--dir')).toBe(true)
   })
 })
+
+const nested = {
+  '': [
+    { name: 'a', path: 'a', isDir: true },
+    { name: 'b', path: 'b', isDir: true },
+    { name: 'readme.md', path: 'readme.md', isDir: false },
+  ],
+  'a': [
+    { name: 'inner.md', path: 'a/inner.md', isDir: false },
+  ],
+  'b': [
+    { name: 'deep', path: 'b/deep', isDir: true },
+  ],
+  'b/deep': [
+    { name: 'x.md', path: 'b/deep/x.md', isDir: false },
+  ],
+}
+
+describe('TreeView expand/collapse', () => {
+  let container
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="host"></div>'
+    container = document.getElementById('host')
+  })
+
+  it('expand(path) loads children, inserts rows, flips aria-expanded', async () => {
+    const loader = makeLoader(nested)
+    const tv = new TreeView(container, { loader })
+    await tv.ready
+    await tv.expand('a')
+    expect(loader).toHaveBeenCalledWith('a')
+    const row = container.querySelector('[data-path="a"]')
+    expect(row.getAttribute('aria-expanded')).toBe('true')
+    expect(container.querySelector('[data-path="a/inner.md"]')).toBeTruthy()
+  })
+
+  it('expand(path) is idempotent — no duplicate loader call, no duplicate rows', async () => {
+    const loader = makeLoader(nested)
+    const tv = new TreeView(container, { loader })
+    await tv.ready
+    await tv.expand('a')
+    await tv.expand('a')
+    const callsForA = loader.mock.calls.filter((c) => c[0] === 'a').length
+    expect(callsForA).toBe(1)
+    expect(container.querySelectorAll('[data-path="a/inner.md"]').length).toBe(1)
+  })
+
+  it('concurrent expand(path) calls share one loader call', async () => {
+    const loader = makeLoader(nested)
+    const tv = new TreeView(container, { loader })
+    await tv.ready
+    await Promise.all([tv.expand('a'), tv.expand('a')])
+    const callsForA = loader.mock.calls.filter((c) => c[0] === 'a').length
+    expect(callsForA).toBe(1)
+  })
+
+  it('collapse(path) removes DOM subtree but preserves model', async () => {
+    const loader = makeLoader(nested)
+    const tv = new TreeView(container, { loader })
+    await tv.ready
+    await tv.expand('a')
+    tv.collapse('a')
+    expect(container.querySelector('[data-path="a/inner.md"]')).toBeNull()
+    expect(container.querySelector('[data-path="a"]').getAttribute('aria-expanded')).toBe('false')
+    // Model retained: re-expand does not re-fetch
+    await tv.expand('a')
+    const callsForA = loader.mock.calls.filter((c) => c[0] === 'a').length
+    expect(callsForA).toBe(1)
+    expect(container.querySelector('[data-path="a/inner.md"]')).toBeTruthy()
+  })
+
+  it('toggle(path) expands if collapsed, collapses if expanded', async () => {
+    const loader = makeLoader(nested)
+    const tv = new TreeView(container, { loader })
+    await tv.ready
+    await tv.toggle('a')
+    expect(container.querySelector('[data-path="a/inner.md"]')).toBeTruthy()
+    await tv.toggle('a')
+    expect(container.querySelector('[data-path="a/inner.md"]')).toBeNull()
+  })
+
+  it('emits tree:toggle on expand and collapse', async () => {
+    const loader = makeLoader(nested)
+    const tv = new TreeView(container, { loader })
+    await tv.ready
+    const events = []
+    container.addEventListener('tree:toggle', (e) => events.push(e.detail))
+    await tv.expand('a')
+    tv.collapse('a')
+    expect(events).toEqual([
+      { path: 'a', expanded: true },
+      { path: 'a', expanded: false },
+    ])
+  })
+
+  it('expand(path) emits tree:error when loader rejects and leaves state unchanged', async () => {
+    const loader = vi.fn(async (path) => {
+      if (path === '') return nested['']
+      throw new Error('nope')
+    })
+    const tv = new TreeView(container, { loader })
+    await tv.ready
+    const errors = []
+    container.addEventListener('tree:error', (e) => errors.push(e.detail))
+    await tv.expand('a').catch(() => {})
+    expect(errors.length).toBe(1)
+    expect(errors[0].path).toBe('a')
+    expect(errors[0].error.message).toBe('nope')
+    expect(container.querySelector('[data-path="a"]').getAttribute('aria-expanded')).toBe('false')
+  })
+})
