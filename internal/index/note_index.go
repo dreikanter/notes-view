@@ -219,11 +219,7 @@ func (i *NoteIndex) runBuild(done chan struct{}) {
 		i.buildMu.Lock()
 		next := i.queuedDone
 		i.queuedDone = nil
-		if next != nil {
-			i.curDone = next
-		} else {
-			i.curDone = nil
-		}
+		i.curDone = next
 		i.buildMu.Unlock()
 
 		close(done)
