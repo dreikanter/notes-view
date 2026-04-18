@@ -166,10 +166,21 @@ describe('TreeView expand/collapse', () => {
     await tv.ready
     const errors = []
     container.addEventListener('tree:error', (e) => errors.push(e.detail))
-    await tv.expand('a').catch(() => {})
+    await tv.expand('a')  // no .catch — promise resolves even on loader rejection
     expect(errors.length).toBe(1)
     expect(errors[0].path).toBe('a')
     expect(errors[0].error.message).toBe('nope')
     expect(container.querySelector('[data-path="a"]').getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('loadingPaths is cleared after a failed expand', async () => {
+    const loader = vi.fn(async (path) => {
+      if (path === '') return nested['']
+      throw new Error('boom')
+    })
+    const tv = new TreeView(container, { loader })
+    await tv.ready
+    await tv.expand('a')
+    expect(tv.loadingPaths.size).toBe(0)
   })
 })

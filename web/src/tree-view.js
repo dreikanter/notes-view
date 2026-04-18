@@ -3,7 +3,9 @@
 // Public API:
 //   const tv = new TreeView(container, { loader, rootPath, persistKey, initial, ... })
 //   await tv.ready
-//   tv.expand(path) / tv.collapse(path) / tv.toggle(path)
+//   tv.expand(path)  — resolves on success or loader error (see tree:error).
+//                      No-op if path is unknown, a file, or already expanded.
+//   tv.collapse(path)/tv.toggle(path) — no-op for unknown paths.
 //   tv.select(path, { source })
 //   tv.refresh(path)
 //   tv.scrollTo(path, { block })
@@ -144,6 +146,8 @@ export class TreeView {
 
     try {
       await promise
+    } catch (_) {
+      // tree:error already emitted by _doExpand; do not rethrow.
     } finally {
       this.loadingPaths.delete(path)
       if (entry.pendingRefresh && this.expandedPaths.has(path)) {
@@ -169,14 +173,24 @@ export class TreeView {
     this.container.dispatchEvent(new CustomEvent('tree:toggle', { detail: { path, expanded: true } }))
   }
 
+  // Returns the direct-child <ul class="<prefix>group"> for `path`, or null.
+  // Implemented without `:scope` because happy-dom (our test environment)
+  // does not support it.
+  _childUl(path) {
+    const parent = path === this.rootPath ? this.root : this._findItem(path)
+    if (!parent) return null
+    const groupCls = this._cls('group')
+    for (const child of parent.children) {
+      if (child.tagName === 'UL' && child.classList.contains(groupCls)) return child
+    }
+    return null
+  }
+
   collapse(path) {
     if (!this.expandedPaths.has(path)) return
     const li = this._findItem(path)
     if (!li) return
-    const groupCls = this._cls('group')
-    const childUl = Array.from(li.children).find(
-      (el) => el.tagName === 'UL' && el.classList.contains(groupCls),
-    )
+    const childUl = this._childUl(path)
     if (childUl) childUl.remove()
     li.setAttribute('aria-expanded', 'false')
     this.expandedPaths.delete(path)
