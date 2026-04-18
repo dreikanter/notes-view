@@ -101,21 +101,8 @@ function markSelected(selector) {
   var el = document.querySelector(selector);
   if (el) {
     el.classList.add('selected', 'bg-blue-100', 'border-blue-300', 'text-blue-700');
-    scrollSelectedIntoView(el);
+    el.scrollIntoView({ block: 'center', inline: 'nearest' });
   }
-}
-
-// Center the selected entry in the sidebar viewport, but only when it is
-// not already fully visible. 'center' is not idempotent on its own, so the
-// visibility guard prevents re-swaps from shifting the sidebar on every
-// htmx:afterSwap.
-function scrollSelectedIntoView(el) {
-  var sidebar = el.closest('#sidebar');
-  if (!sidebar) return;
-  var rect = el.getBoundingClientRect();
-  var sidebarRect = sidebar.getBoundingClientRect();
-  if (rect.top >= sidebarRect.top && rect.bottom <= sidebarRect.bottom) return;
-  el.scrollIntoView({ block: 'center', inline: 'nearest' });
 }
 
 // --- Directory navigation ---
