@@ -18,8 +18,8 @@ test.describe('Sidebar Tree Navigation', () => {
     // Check both section headings are visible
     await expect(page.locator('#files-section')).toBeVisible();
     await expect(page.locator('#tags-section')).toBeVisible();
-    await expect(page.locator('#files-section button')).toContainText('FILES');
-    await expect(page.locator('#tags-section button')).toContainText('TAGS');
+    await expect(page.locator('#files-section > button')).toContainText('FILES');
+    await expect(page.locator('#tags-section > button')).toContainText('TAGS');
   });
 
   test('FILES section shows root directory entries', async ({ page }) => {
@@ -58,27 +58,132 @@ test.describe('Sidebar Tree Navigation', () => {
     await expect(listing.locator('a', { hasText: 'day-two.md' })).toBeVisible();
   });
 
-  test('clicking a directory expands it in sidebar', async ({ page }) => {
+  test('clicking a directory label in the sidebar leaves the tree alone', async ({ page }) => {
     await page.goto('/view/README.md');
     await page.click('#sidebar-toggle');
 
-    // Click journal directory
-    await page.locator('#files-content a', { hasText: 'journal' }).click();
+    const filesContent = page.locator('#files-content');
 
-    // Sidebar files section should now show journal's contents
+    // Click journal directory — navigates the main pane only
+    await filesContent.locator('a', { hasText: 'journal' }).click();
+    await expect(page).toHaveURL(/\/dir\/journal/);
+
+    // Sidebar tree must not restructure; journal's children should NOT
+    // appear in the sidebar as a side effect of the label click.
+    await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toHaveCount(0);
+    await expect(filesContent.locator('a', { hasText: 'day-two.md' })).toHaveCount(0);
+    // Root siblings still visible
+    await expect(filesContent.locator('a', { hasText: 'projects' })).toBeVisible();
+  });
+
+  test('clicking a directory in the main pane expands it in the sidebar', async ({ page }) => {
+    await page.goto('/dir/');
+    await page.click('#sidebar-toggle');
+
+    // Click journal directory from the main pane listing — external origin,
+    // so the sidebar should expand to reflect the new location.
+    const dirListing = page.locator('#dir-listing');
+    await dirListing.locator('a', { hasText: 'journal' }).click();
+
     const filesContent = page.locator('#files-content');
     await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toBeVisible();
     await expect(filesContent.locator('a', { hasText: 'day-two.md' })).toBeVisible();
+  });
+
+  test('chevron toggle collapses an expanded directory without changing URL', async ({ page }) => {
+    await page.goto('/view/README.md');
+    await page.click('#sidebar-toggle');
+
+    const filesContent = page.locator('#files-content');
+
+    // Expand journal via chevron so URL remains /view/README.md
+    await filesContent.locator('button[data-entry-href="/dir/journal"]').click();
+    await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toBeVisible();
+    await expect(page).toHaveURL(/\/view\/README\.md/);
+
+    // Click the chevron again — collapse only; URL stays put
+    await filesContent.locator('button[data-entry-href="/dir/journal"]').click();
+
+    await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toHaveCount(0);
+    await expect(filesContent.locator('a', { hasText: 'journal' })).toBeVisible();
+    await expect(page).toHaveURL(/\/view\/README\.md/);
+  });
+
+  test('chevron on one dir does not collapse a separately expanded dir', async ({ page }) => {
+    await page.goto('/view/README.md');
+    await page.click('#sidebar-toggle');
+
+    const filesContent = page.locator('#files-content');
+
+    // Expand two independent branches via chevrons
+    await filesContent.locator('button[data-entry-href="/dir/journal"]').click();
+    await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toBeVisible();
+    await filesContent.locator('button[data-entry-href="/dir/projects"]').click();
+    await expect(filesContent.locator('a', { hasText: 'alpha.md' })).toBeVisible();
+
+    // Both must remain visible after expanding the second branch
+    await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toBeVisible();
+    await expect(filesContent.locator('a', { hasText: 'alpha.md' })).toBeVisible();
+
+    // Collapse journal — projects must stay expanded
+    await filesContent.locator('button[data-entry-href="/dir/journal"]').click();
+    await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toHaveCount(0);
+    await expect(filesContent.locator('a', { hasText: 'alpha.md' })).toBeVisible();
+
+    // Re-expand journal — projects must still be there
+    await filesContent.locator('button[data-entry-href="/dir/journal"]').click();
+    await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toBeVisible();
+    await expect(filesContent.locator('a', { hasText: 'alpha.md' })).toBeVisible();
+  });
+
+  test('chevron toggle expands a collapsed directory without changing URL', async ({ page }) => {
+    await page.goto('/view/README.md');
+    await page.click('#sidebar-toggle');
+
+    const filesContent = page.locator('#files-content');
+
+    // Start at root — journal is collapsed
+    await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toHaveCount(0);
+
+    // Click the chevron — expand journal in sidebar without navigating
+    await filesContent.locator('button[data-entry-href="/dir/journal"]').click();
+
+    await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toBeVisible();
+    // Main panel and URL unchanged — still showing README.md
+    await expect(page).toHaveURL(/\/view\/README\.md/);
+  });
+
+  test('selecting a note from main pane keeps other expanded dirs open', async ({ page }) => {
+    await page.goto('/view/README.md');
+    await page.click('#sidebar-toggle');
+
+    const filesContent = page.locator('#files-content');
+
+    // Expand both journal and projects via chevrons — two independent branches
+    await filesContent.locator('button[data-entry-href="/dir/journal"]').click();
+    await filesContent.locator('button[data-entry-href="/dir/projects"]').click();
+    await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toBeVisible();
+    await expect(filesContent.locator('a', { hasText: 'alpha.md' })).toBeVisible();
+
+    // Navigate to a note via the main-pane route: show the dir listing for
+    // journal, then click day-two.md from there (external origin).
+    await filesContent.locator('a', { hasText: 'journal' }).click();
+    const listing = page.locator('#dir-listing');
+    await listing.locator('a', { hasText: 'day-two.md' }).click();
+    await page.locator('#note-card').waitFor();
+
+    // journal is still expanded (we just picked a note inside it) AND the
+    // unrelated "projects" branch must still be expanded too.
+    await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toBeVisible();
+    await expect(filesContent.locator('a', { hasText: 'alpha.md' })).toBeVisible();
   });
 
   test('clicking a note opens it in main panel', async ({ page }) => {
     await page.goto('/view/README.md');
     await page.click('#sidebar-toggle');
 
-    // Click journal directory first
-    await page.locator('#files-content a', { hasText: 'journal' }).click();
-
-    // Wait for sidebar to update
+    // Expand journal via chevron so its notes appear in the sidebar
+    await page.locator('#files-content button[data-entry-href="/dir/journal"]').click();
     await page.locator('#files-content a', { hasText: 'day-one.md' }).waitFor();
 
     // Click a note in the sidebar
@@ -145,11 +250,11 @@ test.describe('Sidebar Tree Navigation', () => {
     await expect(page.locator('#files-content')).toBeVisible();
 
     // Click FILES heading to collapse
-    await page.locator('#files-section button').click();
+    await page.locator('#files-section > button').click();
     await expect(page.locator('#files-content')).toBeHidden();
 
     // Click again to expand
-    await page.locator('#files-section button').click();
+    await page.locator('#files-section > button').click();
     await expect(page.locator('#files-content')).toBeVisible();
   });
 
@@ -157,7 +262,8 @@ test.describe('Sidebar Tree Navigation', () => {
     await page.goto('/view/README.md');
     await page.click('#sidebar-toggle');
 
-    // Click journal directory to show listing in both places
+    // Expand journal in the sidebar via chevron; navigate main pane via label
+    await page.locator('#files-content button[data-entry-href="/dir/journal"]').click();
     await page.locator('#files-content a', { hasText: 'journal' }).click();
 
     // Both sidebar and main panel should have entry-link class items
@@ -194,8 +300,8 @@ test.describe('Sidebar Tree Navigation', () => {
     await page.goto('/view/README.md');
     await page.click('#sidebar-toggle');
 
-    // Click journal directory
-    await page.locator('#files-content a', { hasText: 'journal' }).click();
+    // Expand journal via chevron
+    await page.locator('#files-content button[data-entry-href="/dir/journal"]').click();
 
     // Sidebar should show journal expanded with its files indented,
     // AND root-level siblings still visible
@@ -229,8 +335,8 @@ test.describe('Sidebar Tree Navigation', () => {
     await page.goto('/view/README.md');
     await page.click('#sidebar-toggle');
 
-    // Navigate to journal
-    await page.locator('#files-content a', { hasText: 'journal' }).click();
+    // Expand journal via chevron to reveal day-one.md in the sidebar
+    await page.locator('#files-content button[data-entry-href="/dir/journal"]').click();
     await page.locator('#files-content a', { hasText: 'day-one.md' }).waitFor();
 
     // Click a note

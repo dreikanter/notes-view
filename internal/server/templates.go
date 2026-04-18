@@ -22,6 +22,9 @@ type IndexEntry struct {
 type IndexCard struct {
 	Entries []IndexEntry
 	Empty   string
+	// Flat suppresses the directory chevron toggle when rendering this
+	// card — set on main-pane listings where the chevron has no meaning.
+	Flat bool
 }
 
 // layoutFields is the common chrome passed to every full-page render.
@@ -134,6 +137,10 @@ func (t *templateSet) renderSidebarPartial(w io.Writer, data SidebarPartialData)
 
 func (t *templateSet) renderEntryList(w io.Writer, data *IndexCard) error {
 	return t.sidebar.ExecuteTemplate(w, "entry_list", data)
+}
+
+func (t *templateSet) renderEntryListRows(w io.Writer, data *IndexCard) error {
+	return t.sidebar.ExecuteTemplate(w, "entry_list_rows", data)
 }
 
 func (t *templateSet) renderDirListing(w io.Writer, data DirListingData) error {

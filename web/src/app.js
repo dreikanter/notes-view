@@ -38,10 +38,9 @@ function toggleSidebar() {
   try {
     localStorage.setItem('notesview.sidebarOpen', open ? '1' : '0');
   } catch (e) {}
-
-  if (open) {
-    refreshSidebar();
-  }
+  // No sidebar refetch on open: the tree is rendered server-side at page
+  // load and then managed locally via chevrons. Refetching would wipe
+  // every expansion the user opened by hand.
 }
 
 // --- Sidebar tree state ---
@@ -101,15 +100,17 @@ function markSelected(selector) {
   var el = document.querySelector(selector);
   if (el) {
     el.classList.add('selected', 'bg-blue-100', 'border-blue-300', 'text-blue-700');
-    el.scrollIntoView({ block: 'center', inline: 'nearest' });
   }
 }
 
+// Set by deliberate navigation (selectNote/Dir/Tag) so the next swap that
+// finds the selected element scrolls it into view. Sidebar-only actions
+// like toggleDir leave it unset, so they don't hijack the viewport.
+var pendingScrollToSelected = false;
+
 // --- Directory navigation ---
 
-window.selectDir = function(href, skipPush) {
-  var dirPath = href.replace(/^\/dir\//, '');
-  setLS('filesDir', decodeURIComponent(dirPath));
+window.selectDir = function(href, skipPush, fromSidebar) {
   setLS('selected', href);
 
   // Push browser URL
@@ -122,11 +123,18 @@ window.selectDir = function(href, skipPush) {
     headers: { 'HX-Target': 'note-pane' },
   });
 
-  // Load tree in sidebar files section
-  htmx.ajax('GET', href, {
-    target: '#files-content',
-    swap: 'innerHTML',
-  });
+  // Sidebar tree is only changed by the chevron and by out-of-sidebar
+  // navigations. Sidebar label clicks leave the tree alone so the
+  // clicked row stays under the cursor. Main-pane / popstate clicks
+  // reveal the destination by expanding its ancestor chain in place —
+  // preserving any other dirs the user already opened.
+  if (!fromSidebar) {
+    var dirPath = href.replace(/^\/dir\//, '');
+    var decoded = decodeURIComponent(dirPath);
+    ensureDirPathVisible(decoded, true).then(function() {
+      revealSelected(href);
+    });
+  }
 
   // Ensure files section is visible
   var content = document.getElementById('files-content');
@@ -136,12 +144,119 @@ window.selectDir = function(href, skipPush) {
   setLS('filesOpen', '1');
 };
 
+// Chevron click: toggle a directory's expanded state by manipulating only
+// the rows under the clicked <li>. Avoids re-rendering the whole tree,
+// which would reshuffle siblings and jerk the clicked row away from the
+// cursor. Does not touch the URL, the main pane, or filesDir.
+window.toggleDir = function(href, isExpanded) {
+  var button = findToggleButton(href);
+  if (!button) return;
+
+  if (isExpanded) {
+    collapseDirLocal(button);
+    return;
+  }
+
+  expandDirLocal(button).then(function() {
+    var selected = getLS('selected', '');
+    if (selected) markSelected('[data-entry-href="' + selected + '"]');
+  });
+};
+
+function findToggleButton(href) {
+  return document.querySelector(
+    'button[data-action="toggleDir"][data-entry-href="' + href + '"]'
+  );
+}
+
+function collapseDirLocal(button) {
+  var li = button.closest('li');
+  if (!li) return;
+  var depth = parseInt(li.getAttribute('data-depth') || '0', 10);
+  var sibling = li.nextElementSibling;
+  while (sibling) {
+    var d = parseInt(sibling.getAttribute('data-depth') || '0', 10);
+    if (d <= depth) break;
+    var next = sibling.nextElementSibling;
+    sibling.remove();
+    sibling = next;
+  }
+  setChevronState(button, false);
+}
+
+function expandDirLocal(button) {
+  if (button.getAttribute('data-expanded') === '1') return Promise.resolve();
+  var li = button.closest('li');
+  if (!li) return Promise.resolve();
+  var depth = parseInt(li.getAttribute('data-depth') || '0', 10);
+  var href = button.getAttribute('data-entry-href') || '';
+  var dirPath = decodeURIComponent(href.replace(/^\/dir\//, ''));
+  var url = '/dir/' + encodePath(dirPath) + '?children=1&depth=' + (depth + 1);
+  return fetch(url, { headers: { 'HX-Request': 'true' } })
+    .then(function(res) { return res.ok ? res.text() : ''; })
+    .then(function(html) {
+      if (!html) return;
+      // Guard against double-fetch races: a parallel expand already
+      // inserted the rows, so do nothing this time.
+      if (button.getAttribute('data-expanded') === '1') return;
+      var tmpl = document.createElement('template');
+      tmpl.innerHTML = html.trim();
+      var newRows = Array.from(tmpl.content.children);
+      for (var i = newRows.length - 1; i >= 0; i--) {
+        li.insertAdjacentElement('afterend', newRows[i]);
+      }
+      setChevronState(button, true);
+    });
+}
+
+// Walk an ancestor chain (a[, /b[, /c...]]) and expand each segment in
+// the sidebar. Segments already expanded are left alone; nothing else in
+// the tree is touched. includeLeaf=true also expands the final segment
+// (used for dir navigation); includeLeaf=false stops one short (used for
+// notes, which aren't expandable).
+function ensureDirPathVisible(path, includeLeaf) {
+  if (!path) return Promise.resolve();
+  var parts = path.split('/');
+  var end = includeLeaf ? parts.length : parts.length - 1;
+  var chain = Promise.resolve();
+  for (var i = 1; i <= end; i++) {
+    (function(ancestor) {
+      chain = chain.then(function() { return ensureDirExpanded(ancestor); });
+    })(parts.slice(0, i).join('/'));
+  }
+  return chain;
+}
+
+function ensureDirExpanded(dirPath) {
+  var href = '/dir/' + encodePath(dirPath);
+  var button = findToggleButton(href);
+  if (!button) return Promise.resolve();
+  if (button.getAttribute('data-expanded') === '1') return Promise.resolve();
+  return expandDirLocal(button);
+}
+
+function revealSelected(href) {
+  markSelected('[data-entry-href="' + href + '"]');
+  var el = document.querySelector('[data-entry-href="' + href + '"]');
+  if (el) el.scrollIntoView({ block: 'center', inline: 'nearest' });
+}
+
+function setChevronState(button, expanded) {
+  button.textContent = expanded ? '\u25BE' : '\u25B8';
+  button.setAttribute('data-expanded', expanded ? '1' : '0');
+  button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  var name = button.getAttribute('aria-label') || '';
+  name = name.replace(/^(Collapse|Expand)\s+/, '');
+  button.setAttribute('aria-label', (expanded ? 'Collapse ' : 'Expand ') + name);
+}
+
 // --- Tag navigation ---
 
-window.selectTag = function(tag, skipPush) {
+window.selectTag = function(tag, skipPush, fromSidebar) {
   var href = '/tags/' + encodeURIComponent(tag);
   setLS('tagsTag', tag);
   setLS('selected', href);
+  if (!fromSidebar) pendingScrollToSelected = true;
 
   // Push browser URL
   if (!skipPush) history.pushState({ type: 'tag', tag: tag, href: href }, '', href);
@@ -165,7 +280,7 @@ window.selectTag = function(tag, skipPush) {
 
 var pendingNoteScrollReset = false;
 
-window.selectNote = function(href, skipPush) {
+window.selectNote = function(href, skipPush, fromSidebar) {
   setLS('selected', href);
 
   // Push browser URL
@@ -184,18 +299,15 @@ window.selectNote = function(href, skipPush) {
     headers: { 'HX-Target': 'note-pane' },
   });
 
-  // Expand the note's parent directory in the sidebar so the note
-  // appears highlighted among its siblings.
-  var notePath = href.replace(/^\/view\//, '');
-  var parts = decodeURIComponent(notePath).split('/');
-  if (parts.length > 1) {
-    // Has a parent directory — expand it
-    var parentDir = parts.slice(0, -1).join('/');
-    setLS('filesDir', parentDir);
-    var dirHref = '/dir/' + encodePath(parentDir);
-    htmx.ajax('GET', dirHref, {
-      target: '#files-content',
-      swap: 'innerHTML',
+  // For out-of-sidebar clicks (main-pane listing, tag filter, popstate),
+  // reveal the note by expanding its ancestor chain in place. Any dirs
+  // the user already opened elsewhere stay open. Sidebar-originated
+  // clicks don't touch the tree — the note is already visible there.
+  if (!fromSidebar) {
+    var notePath = href.replace(/^\/view\//, '');
+    var parentPath = decodeURIComponent(notePath).split('/').slice(0, -1).join('/');
+    ensureDirPathVisible(parentPath, true).then(function() {
+      revealSelected(href);
     });
   }
 
@@ -233,22 +345,6 @@ window.addEventListener('popstate', function(e) {
 
 // --- Restore state ---
 
-function refreshSidebar() {
-  var filesDir = getLS('filesDir', '');
-  var filesUrl = '/dir/' + encodePath(filesDir);
-  htmx.ajax('GET', filesUrl, {
-    target: '#files-content',
-    swap: 'innerHTML',
-  });
-
-  var tagsTag = getLS('tagsTag', '');
-  var tagsUrl = tagsTag ? '/tags/' + encodeURIComponent(tagsTag) : '/tags';
-  htmx.ajax('GET', tagsUrl, {
-    target: '#tags-content',
-    swap: 'innerHTML',
-  });
-}
-
 function restoreSidebarState() {
   restoreSectionState('files');
   restoreSectionState('tags');
@@ -262,13 +358,18 @@ document.addEventListener('click', function(e) {
   var link = e.target.closest('[data-action]');
   if (!link) return;
   e.preventDefault();
+  // Clicks originating inside the sidebar should not scroll the sidebar
+  // to center the clicked item — the user already has it under the cursor.
+  var fromSidebar = !!e.target.closest('#sidebar');
   var action = link.dataset.action;
   if (action === 'selectTag') {
-    selectTag(link.dataset.entryName);
+    selectTag(link.dataset.entryName, false, fromSidebar);
   } else if (action === 'selectDir') {
-    selectDir(link.dataset.entryHref);
+    selectDir(link.dataset.entryHref, false, fromSidebar);
   } else if (action === 'selectNote') {
-    selectNote(link.dataset.entryHref);
+    selectNote(link.dataset.entryHref, false, fromSidebar);
+  } else if (action === 'toggleDir') {
+    toggleDir(link.dataset.entryHref, link.dataset.expanded === '1');
   }
 });
 
@@ -282,11 +383,20 @@ document.body.addEventListener('htmx:afterSwap', function(e) {
     pendingNoteScrollReset = false;
   }
 
-  // Re-apply selection highlight after any swap
+  // Re-apply selection highlight after any swap. Scroll into view only
+  // when a deliberate navigation flagged it — toggleDir swaps must not
+  // yank the viewport away from where the user's cursor is.
   var selected = getLS('selected', '');
   if (selected) {
     setTimeout(function() {
       markSelected('[data-entry-href="' + selected + '"]');
+      if (pendingScrollToSelected) {
+        var el = document.querySelector('[data-entry-href="' + selected + '"]');
+        if (el) {
+          el.scrollIntoView({ block: 'center', inline: 'nearest' });
+          pendingScrollToSelected = false;
+        }
+      }
     }, 0);
   }
 });
