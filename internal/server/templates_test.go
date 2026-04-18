@@ -17,9 +17,6 @@ func TestLoadTemplates(t *testing.T) {
 	if ts.view == nil {
 		t.Error("view template is nil")
 	}
-	if ts.sidebar == nil {
-		t.Error("sidebar template is nil")
-	}
 	if ts.note == nil {
 		t.Error("note template is nil")
 	}
@@ -32,9 +29,6 @@ func TestLoadTemplates_EntryListDefined(t *testing.T) {
 	}
 	if ts.view.Lookup("entry_list") == nil {
 		t.Error("view template set missing 'entry_list'")
-	}
-	if ts.sidebar.Lookup("entry_list") == nil {
-		t.Error("sidebar template set missing 'entry_list'")
 	}
 }
 
@@ -63,16 +57,6 @@ func TestParsePage(t *testing.T) {
 		if tmpl.Lookup(name) == nil {
 			t.Errorf("parsePage result missing template %q", name)
 		}
-	}
-}
-
-func TestParsePartial_SidebarBody(t *testing.T) {
-	tmpl, err := parsePartial("sidebar_body")
-	if err != nil {
-		t.Fatalf("parsePartial(sidebar_body) error: %v", err)
-	}
-	if tmpl.Lookup("sidebar_body") == nil {
-		t.Error("sidebar_body template not defined")
 	}
 }
 
@@ -109,11 +93,6 @@ func TestRenderView(t *testing.T) {
 		SSEWatch: "/events?watch=notes%2Ftest.md",
 		ViewHref: "/view/notes/test.md",
 		Sidebar: SidebarPartialData{
-			Files: &IndexCard{
-				Entries: []IndexEntry{
-					{Name: "test.md", IsDir: false, Href: "/view/notes/test.md"},
-				},
-			},
 			Tags: &IndexCard{
 				Entries: nil,
 				Empty:   "No tags found.",
@@ -138,7 +117,6 @@ func TestRenderView(t *testing.T) {
 		{"tag go", ">go<"},
 		{"tag testing", ">testing<"},
 		{"description", "A test note"},
-		{"sse-connect", `sse-connect="/events?watch=notes%2Ftest.md"`},
 		{"sidebar", `id="sidebar"`},
 		{"note-pane", `id="note-pane"`},
 		{"edit button", `/edit/notes/test.md`},
@@ -207,7 +185,6 @@ func TestRenderNotePartial(t *testing.T) {
 		{"note title", ">March Note<"},
 		{"tag", ">journal<"},
 		{"content", "Partial content"},
-		{"sse-connect", `sse-connect="/events?watch=2026%2F03%2Fnote.md"`},
 		{"edit button", `/edit/2026/03/note.md`},
 	}
 
@@ -220,102 +197,6 @@ func TestRenderNotePartial(t *testing.T) {
 	// Should NOT contain full layout elements.
 	if strings.Contains(body, "<!DOCTYPE html>") {
 		t.Error("renderNotePartial should not contain full HTML document")
-	}
-}
-
-func TestRenderSidebarPartial(t *testing.T) {
-	ts, err := loadTemplates()
-	if err != nil {
-		t.Fatalf("loadTemplates() error: %v", err)
-	}
-
-	data := SidebarPartialData{
-		Files: &IndexCard{
-			Entries: []IndexEntry{
-				{Name: "readme.md", IsDir: false, Href: "/view/docs/readme.md"},
-				{Name: "subdir", IsDir: true, Href: "/view/docs/subdir/"},
-			},
-		},
-		Tags: &IndexCard{
-			Empty: "No tags found.",
-		},
-	}
-
-	var buf bytes.Buffer
-	if err := ts.renderSidebarPartial(&buf, data); err != nil {
-		t.Fatalf("renderSidebarPartial() error: %v", err)
-	}
-
-	body := buf.String()
-	if !strings.Contains(body, "readme.md") {
-		t.Error("renderSidebarPartial: expected file entry 'readme.md'")
-	}
-	if !strings.Contains(body, "subdir") {
-		t.Error("renderSidebarPartial: expected directory entry 'subdir'")
-	}
-
-	// Should NOT contain full layout elements.
-	if strings.Contains(body, "<!DOCTYPE html>") {
-		t.Error("renderSidebarPartial should not contain full HTML document")
-	}
-}
-
-func TestRenderSidebarPartial_NilIndexCard(t *testing.T) {
-	ts, err := loadTemplates()
-	if err != nil {
-		t.Fatalf("loadTemplates() error: %v", err)
-	}
-
-	data := SidebarPartialData{Files: nil, Tags: nil}
-
-	var buf bytes.Buffer
-	if err := ts.renderSidebarPartial(&buf, data); err != nil {
-		t.Fatalf("renderSidebarPartial() with nil IndexCards error: %v", err)
-	}
-}
-
-func TestRenderSidebarPartial_Tree(t *testing.T) {
-	ts, err := loadTemplates()
-	if err != nil {
-		t.Fatalf("loadTemplates() error: %v", err)
-	}
-	data := SidebarPartialData{
-		Files: &IndexCard{
-			Entries: []IndexEntry{
-				{Name: "notes", IsDir: true, Href: "/dir/notes"},
-				{Name: "README.md", IsDir: false, Href: "/view/README.md"},
-			},
-			Empty: "No files here.",
-		},
-		Tags: &IndexCard{
-			Entries: []IndexEntry{
-				{Name: "golang", IsTag: true, Href: "/tags/golang"},
-				{Name: "til", IsTag: true, Href: "/tags/til"},
-			},
-			Empty: "No tags found.",
-		},
-	}
-	var buf bytes.Buffer
-	if err := ts.renderSidebarPartial(&buf, data); err != nil {
-		t.Fatalf("renderSidebarPartial() error: %v", err)
-	}
-	body := buf.String()
-	checks := []struct {
-		label    string
-		contains string
-	}{
-		{"files heading", "FILES"},
-		{"tags heading", "TAGS"},
-		{"dir entry", "notes"},
-		{"file entry", "README.md"},
-		{"tag entry", "golang"},
-		{"files-content target", `id="files-content"`},
-		{"tags-content target", `id="tags-content"`},
-	}
-	for _, c := range checks {
-		if !strings.Contains(body, c.contains) {
-			t.Errorf("expected %s (%q) in output", c.label, c.contains)
-		}
 	}
 }
 

@@ -15,11 +15,13 @@ func TestSSEConnection(t *testing.T) {
 	testFile := filepath.Join(dir, "test.md")
 	os.WriteFile(testFile, []byte("# Test"), 0o644)
 
-	hub := NewSSEHub(dir, nil, nil)
-	hub.Start()
+	hub := NewEventHub(dir, nil, nil)
+	if err := hub.Start(); err != nil {
+		t.Fatal(err)
+	}
 	defer hub.Stop()
 
-	srv := &Server{root: dir, sseHub: hub}
+	srv := &Server{root: dir, events: hub}
 
 	req := httptest.NewRequest("GET", "/events?watch=test.md", nil)
 	ctx, cancel := context.WithTimeout(req.Context(), 2*time.Second)
@@ -30,7 +32,7 @@ func TestSSEConnection(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		srv.handleSSE(w, req)
+		srv.handleEvents(w, req)
 		close(done)
 	}()
 
@@ -46,10 +48,12 @@ func TestSSEConnection(t *testing.T) {
 
 func TestServerShutdownStopsHub(t *testing.T) {
 	dir := t.TempDir()
-	hub := NewSSEHub(dir, nil, nil)
-	hub.Start()
+	hub := NewEventHub(dir, nil, nil)
+	if err := hub.Start(); err != nil {
+		t.Fatal(err)
+	}
 
-	srv := &Server{root: dir, sseHub: hub}
+	srv := &Server{root: dir, events: hub}
 	srv.Shutdown()
 
 	// After Shutdown, the done channel should be closed.
@@ -63,8 +67,10 @@ func TestServerShutdownStopsHub(t *testing.T) {
 
 func TestSSEHubClientCleanup(t *testing.T) {
 	dir := t.TempDir()
-	hub := NewSSEHub(dir, nil, nil)
-	hub.Start()
+	hub := NewEventHub(dir, nil, nil)
+	if err := hub.Start(); err != nil {
+		t.Fatal(err)
+	}
 	defer hub.Stop()
 
 	hub.mu.RLock()
@@ -79,33 +85,35 @@ func TestSSEMultiClientBroadcast(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "shared.md"), []byte("# Shared"), 0o644)
 
-	hub := NewSSEHub(dir, nil, nil)
-	hub.Start()
+	hub := NewEventHub(dir, nil, nil)
+	if err := hub.Start(); err != nil {
+		t.Fatal(err)
+	}
 	defer hub.Stop()
 
-	c1 := &sseClient{watchPath: "shared.md", events: make(chan string, 1)}
-	c2 := &sseClient{watchPath: "shared.md", events: make(chan string, 1)}
+	c1 := &Subscription{watchPath: "shared.md", events: make(chan eventMsg, 1)}
+	c2 := &Subscription{watchPath: "shared.md", events: make(chan eventMsg, 1)}
 	hub.addClient(c1)
 	hub.addClient(c2)
 	defer hub.removeClient(c1)
 	defer hub.removeClient(c2)
 
 	absPath, _ := SafePath(dir, "shared.md")
-	hub.broadcast(absPath)
+	hub.broadcastChange(absPath)
 
 	select {
-	case p := <-c1.events:
-		if p != "shared.md" {
-			t.Errorf("client 1: expected shared.md, got %s", p)
+	case msg := <-c1.events:
+		if msg.path != "shared.md" || msg.kind != "change" {
+			t.Errorf("client 1: expected change/shared.md, got %s/%s", msg.kind, msg.path)
 		}
 	case <-time.After(time.Second):
 		t.Error("client 1: timed out waiting for event")
 	}
 
 	select {
-	case p := <-c2.events:
-		if p != "shared.md" {
-			t.Errorf("client 2: expected shared.md, got %s", p)
+	case msg := <-c2.events:
+		if msg.path != "shared.md" || msg.kind != "change" {
+			t.Errorf("client 2: expected change/shared.md, got %s/%s", msg.kind, msg.path)
 		}
 	case <-time.After(time.Second):
 		t.Error("client 2: timed out waiting for event")
@@ -117,19 +125,21 @@ func TestSSESelectiveBroadcast(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "a.md"), []byte("A"), 0o644)
 	os.WriteFile(filepath.Join(dir, "b.md"), []byte("B"), 0o644)
 
-	hub := NewSSEHub(dir, nil, nil)
-	hub.Start()
+	hub := NewEventHub(dir, nil, nil)
+	if err := hub.Start(); err != nil {
+		t.Fatal(err)
+	}
 	defer hub.Stop()
 
-	clientA := &sseClient{watchPath: "a.md", events: make(chan string, 1)}
-	clientB := &sseClient{watchPath: "b.md", events: make(chan string, 1)}
+	clientA := &Subscription{watchPath: "a.md", events: make(chan eventMsg, 1)}
+	clientB := &Subscription{watchPath: "b.md", events: make(chan eventMsg, 1)}
 	hub.addClient(clientA)
 	hub.addClient(clientB)
 	defer hub.removeClient(clientA)
 	defer hub.removeClient(clientB)
 
 	absA, _ := SafePath(dir, "a.md")
-	hub.broadcast(absA)
+	hub.broadcastChange(absA)
 
 	select {
 	case <-clientA.events:
@@ -151,12 +161,14 @@ func TestSSEPerPathDebounce(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "a.md"), []byte("A"), 0o644)
 	os.WriteFile(filepath.Join(dir, "b.md"), []byte("B"), 0o644)
 
-	hub := NewSSEHub(dir, nil, nil)
-	hub.Start()
+	hub := NewEventHub(dir, nil, nil)
+	if err := hub.Start(); err != nil {
+		t.Fatal(err)
+	}
 	defer hub.Stop()
 
-	clientA := &sseClient{watchPath: "a.md", events: make(chan string, 1)}
-	clientB := &sseClient{watchPath: "b.md", events: make(chan string, 1)}
+	clientA := &Subscription{watchPath: "a.md", events: make(chan eventMsg, 1)}
+	clientB := &Subscription{watchPath: "b.md", events: make(chan eventMsg, 1)}
 	hub.addClient(clientA)
 	hub.addClient(clientB)
 	defer hub.removeClient(clientA)
@@ -189,11 +201,13 @@ func TestSSEClientCleanupOnDisconnect(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "test.md"), []byte("# Test"), 0o644)
 
-	hub := NewSSEHub(dir, nil, nil)
-	hub.Start()
+	hub := NewEventHub(dir, nil, nil)
+	if err := hub.Start(); err != nil {
+		t.Fatal(err)
+	}
 	defer hub.Stop()
 
-	srv := &Server{root: dir, sseHub: hub}
+	srv := &Server{root: dir, events: hub}
 
 	req := httptest.NewRequest("GET", "/events?watch=test.md", nil)
 	ctx, cancel := context.WithCancel(req.Context())
@@ -202,7 +216,7 @@ func TestSSEClientCleanupOnDisconnect(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		srv.handleSSE(w, req)
+		srv.handleEvents(w, req)
 		close(done)
 	}()
 
@@ -226,31 +240,24 @@ func TestSSEClientCleanupOnDisconnect(t *testing.T) {
 	if after != 0 {
 		t.Errorf("expected 0 clients after disconnect, got %d", after)
 	}
-
-	// The watcher should have removed the directory.
-	watched := hub.watcher.WatchList()
-	parentDir := filepath.Dir(filepath.Join(dir, "test.md"))
-	for _, w := range watched {
-		if w == parentDir {
-			t.Errorf("watcher still watching %s after last client disconnected", parentDir)
-		}
-	}
 }
 
 func TestSSENonBlockingSend(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "test.md"), []byte("data"), 0o644)
 
-	hub := NewSSEHub(dir, nil, nil)
-	hub.Start()
+	hub := NewEventHub(dir, nil, nil)
+	if err := hub.Start(); err != nil {
+		t.Fatal(err)
+	}
 	defer hub.Stop()
 
 	// Slow client: buffer is already full.
-	slow := &sseClient{watchPath: "test.md", events: make(chan string, 1)}
-	slow.events <- "stale"
+	slow := &Subscription{watchPath: "test.md", events: make(chan eventMsg, 1)}
+	slow.events <- eventMsg{kind: "change", path: "stale"}
 
 	// Fast client: buffer is empty.
-	fast := &sseClient{watchPath: "test.md", events: make(chan string, 1)}
+	fast := &Subscription{watchPath: "test.md", events: make(chan eventMsg, 1)}
 
 	hub.addClient(slow)
 	hub.addClient(fast)
@@ -259,10 +266,10 @@ func TestSSENonBlockingSend(t *testing.T) {
 
 	absPath, _ := SafePath(dir, "test.md")
 
-	// broadcast must not block even though slow's channel is full.
+	// broadcastChange must not block even though slow's channel is full.
 	broadcastDone := make(chan struct{})
 	go func() {
-		hub.broadcast(absPath)
+		hub.broadcastChange(absPath)
 		close(broadcastDone)
 	}()
 
@@ -276,8 +283,8 @@ func TestSSENonBlockingSend(t *testing.T) {
 	// Fast client should have received the event.
 	select {
 	case p := <-fast.events:
-		if p != "test.md" {
-			t.Errorf("fast client: expected test.md, got %s", p)
+		if p.path != "test.md" {
+			t.Errorf("fast client: expected test.md, got %s", p.path)
 		}
 	default:
 		t.Error("fast client should have received the event")
@@ -286,10 +293,135 @@ func TestSSENonBlockingSend(t *testing.T) {
 	// Slow client's channel should still contain the stale value (not replaced).
 	select {
 	case p := <-slow.events:
-		if p != "stale" {
-			t.Errorf("slow client: expected stale value, got %s", p)
+		if p.path != "stale" {
+			t.Errorf("slow client: expected stale value, got %s", p.path)
 		}
 	default:
 		t.Error("slow client channel should still have the stale value")
+	}
+}
+
+func TestDirChangedBroadcast(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "a"), 0o755)
+
+	hub := NewEventHub(dir, nil, nil)
+	if err := hub.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer hub.Stop()
+
+	sub := &Subscription{watchPath: "", events: make(chan eventMsg, 4)}
+	hub.addClient(sub)
+	defer hub.removeClient(sub)
+
+	if err := os.WriteFile(filepath.Join(dir, "a", "new.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case msg := <-sub.events:
+		if msg.kind != "dir-changed" {
+			t.Errorf("kind = %q, want dir-changed", msg.kind)
+		}
+		if msg.path != "a" {
+			t.Errorf("path = %q, want a", msg.path)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for dir-changed")
+	}
+}
+
+func TestDirChangedOnNewSubdir(t *testing.T) {
+	dir := t.TempDir()
+
+	hub := NewEventHub(dir, nil, nil)
+	if err := hub.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer hub.Stop()
+
+	sub := &Subscription{watchPath: "", events: make(chan eventMsg, 4)}
+	hub.addClient(sub)
+	defer hub.removeClient(sub)
+
+	if err := os.Mkdir(filepath.Join(dir, "newdir"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case msg := <-sub.events:
+			if msg.kind == "dir-changed" && msg.path == "" {
+				return
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for dir-changed at root")
+		}
+	}
+}
+
+func TestDirChangedEndpointEmitsEvent(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "a"), 0o755)
+
+	hub := NewEventHub(dir, nil, nil)
+	if err := hub.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer hub.Stop()
+
+	srv := &Server{root: dir, events: hub}
+
+	req := httptest.NewRequest("GET", "/events", nil)
+	ctx, cancel := context.WithTimeout(req.Context(), 3*time.Second)
+	defer cancel()
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		srv.handleEvents(w, req)
+		close(done)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	os.WriteFile(filepath.Join(dir, "a", "n.md"), []byte("x"), 0o644)
+
+	<-done
+	body := w.Body.String()
+	if !strings.Contains(body, "event: dir-changed") {
+		t.Errorf("expected event: dir-changed in body, got:\n%s", body)
+	}
+}
+
+func TestChangeEventStillDelivered(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "x.md"), []byte("a"), 0o644)
+
+	hub := NewEventHub(dir, nil, nil)
+	if err := hub.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer hub.Stop()
+
+	sub := &Subscription{watchPath: "x.md", events: make(chan eventMsg, 4)}
+	hub.addClient(sub)
+	defer hub.removeClient(sub)
+
+	os.WriteFile(filepath.Join(dir, "x.md"), []byte("b"), 0o644)
+
+	deadline := time.After(3 * time.Second)
+	gotChange := false
+	for !gotChange {
+		select {
+		case msg := <-sub.events:
+			if msg.kind == "change" && msg.path == "x.md" {
+				gotChange = true
+			}
+		case <-deadline:
+			t.Fatal("change event not delivered")
+		}
 	}
 }

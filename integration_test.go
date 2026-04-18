@@ -64,8 +64,8 @@ func TestIntegrationSmoke(t *testing.T) {
 	}
 
 	// Test: /view/README.md renders a two-pane view with the sidebar
-	// showing the note's parent directory (root). Dir entries link to
-	// /dir/{path}, file entries link to /view/{path}.
+	// placeholder. The tree itself is populated client-side from
+	// /api/tree/list, so assert the API returns the expected root entries.
 	dirResp, err := http.Get(ts.URL + "/view/README.md")
 	if err != nil {
 		t.Fatal(err)
@@ -78,13 +78,25 @@ func TestIntegrationSmoke(t *testing.T) {
 	if dirResp.StatusCode != http.StatusOK {
 		t.Errorf("/view/README.md: status = %d, body: %s", dirResp.StatusCode, viewBody)
 	}
-	// Sidebar region must be present.
 	if !strings.Contains(string(viewBody), `id="sidebar"`) {
 		t.Errorf("expected #sidebar in response")
 	}
-	// The root dir contains 2026/. Its entry must link to /dir/2026.
-	if !strings.Contains(string(viewBody), `href="/dir/2026"`) {
-		t.Errorf("expected 2026/ dir entry linking to /dir/2026, got: %s", viewBody)
+	if !strings.Contains(string(viewBody), `id="sidebar-tree"`) {
+		t.Errorf("expected sidebar-tree placeholder in response")
+	}
+	if !strings.Contains(string(viewBody), `"selectedPath":"README.md"`) {
+		t.Errorf("expected selectedPath=README.md in initial JSON")
+	}
+
+	// Tree data comes from /api/tree/list.
+	listResp, err := http.Get(ts.URL + "/api/tree/list?path=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listBody, _ := io.ReadAll(listResp.Body)
+	listResp.Body.Close()
+	if !strings.Contains(string(listBody), `"path":"2026"`) || !strings.Contains(string(listBody), `"isDir":true`) {
+		t.Errorf("expected 2026 dir entry in tree list, got: %s", listBody)
 	}
 
 	// Test: raw endpoint
