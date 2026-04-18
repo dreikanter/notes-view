@@ -51,7 +51,7 @@ GET /events               focusedPath
   → change events         methods:
   → dir-changed            expand/collapse/toggle
                            select/scrollTo/refresh
-                           setRoot/destroy
+                           destroy
 
                           events on container:
                            tree:select
@@ -102,7 +102,6 @@ Component never mutates received nodes. Paths are opaque; equality is `===`. The
 | `select(path, {source='api'})` | Sets selection. Updates `aria-selected`, visual highlight, focus. Emits `tree:select` unless `source === 'silent'`. |
 | `scrollTo(path, {block='center'})` | Scrolls the node into view. No-op if already fully visible. Never called automatically. |
 | `refresh(path)` | Re-fetches children for `path` (if expanded or root). Reconciles DOM. Preserves descendants that still exist. If a load is in flight for `path`, flags a follow-up refresh instead of firing a second loader. |
-| `setRoot(path)` | Replaces the root path (rare). Clears state. |
 | `destroy()` | Removes DOM, listeners. LocalStorage cleanup is opt-in. |
 
 ### Events (dispatched on `container`)
