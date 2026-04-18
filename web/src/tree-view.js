@@ -16,9 +16,6 @@
 //
 // See docs/superpowers/specs/2026-04-18-tree-view-component-design.md
 
-const DIR_CLASS = 'tv-item--dir'
-const FILE_CLASS = 'tv-item--file'
-
 function escapeSelector(s) {
   if (typeof CSS !== 'undefined' && CSS.escape) return CSS.escape(s)
   return String(s).replace(/["\\[\]]/g, '\\$&')
@@ -46,11 +43,15 @@ export class TreeView {
 
     this.container.innerHTML = ''
     this.root = document.createElement('div')
-    this.root.className = 'tv-root'
+    this.root.className = this._cls('root')
     this.root.setAttribute('role', 'tree')
     this.container.appendChild(this.root)
 
     this.ready = this._bootstrap()
+  }
+
+  _cls(suffix) {
+    return `${this.classPrefix}${suffix}`
   }
 
   async _bootstrap() {
@@ -67,7 +68,7 @@ export class TreeView {
 
   _renderChildren(parentPath, parentEl, nodes, baseLevel) {
     const ul = document.createElement('ul')
-    ul.className = 'tv-group list-none m-0 p-0'
+    ul.className = `${this._cls('group')} list-none m-0 p-0`
     ul.setAttribute('role', 'group')
     for (const node of nodes) {
       ul.appendChild(this._buildItem(node, baseLevel + 1))
@@ -77,7 +78,7 @@ export class TreeView {
 
   _buildItem(node, level) {
     const li = document.createElement('li')
-    li.className = `tv-item ${node.isDir ? DIR_CLASS : FILE_CLASS}`
+    li.className = `${this._cls('item')} ${node.isDir ? this._cls('item--dir') : this._cls('item--file')}`
     li.setAttribute('role', 'treeitem')
     li.setAttribute('data-path', node.path)
     li.setAttribute('aria-level', String(level))
@@ -87,23 +88,23 @@ export class TreeView {
     if (node.isDir) li.setAttribute('aria-expanded', 'false')
 
     const row = document.createElement('div')
-    row.className = 'tv-row flex items-center gap-2 px-4 py-2 text-sm'
+    row.className = `${this._cls('row')} flex items-center gap-2 px-4 py-2 text-sm`
     if (node.isDir) {
       const btn = document.createElement('button')
       btn.type = 'button'
-      btn.className = 'tv-toggle flex items-center justify-center w-8 flex-shrink-0 text-gray-400 cursor-pointer bg-transparent border-0 p-0'
+      btn.className = `${this._cls('toggle')} flex items-center justify-center w-8 flex-shrink-0 text-gray-400 cursor-pointer bg-transparent border-0 p-0`
       btn.setAttribute('tabindex', '-1')
       btn.setAttribute('aria-hidden', 'true')
       btn.textContent = '\u25B8'
       row.appendChild(btn)
     } else {
       const spacer = document.createElement('span')
-      spacer.className = 'tv-toggle-spacer w-8 flex-shrink-0'
+      spacer.className = `${this._cls('toggle-spacer')} w-8 flex-shrink-0`
       row.appendChild(spacer)
     }
 
     const icon = document.createElement('span')
-    icon.className = 'tv-icon flex-shrink-0'
+    icon.className = `${this._cls('icon')} flex-shrink-0`
     if (typeof this.renderIcon === 'function') {
       const result = this.renderIcon(node)
       if (typeof result === 'string') icon.textContent = result
@@ -114,7 +115,7 @@ export class TreeView {
     row.appendChild(icon)
 
     const label = document.createElement('span')
-    label.className = 'tv-label truncate min-w-0 text-blue-600'
+    label.className = `${this._cls('label')} truncate min-w-0 text-blue-600`
     if (typeof this.renderLabel === 'function') {
       const result = this.renderLabel(node)
       if (typeof result === 'string') label.textContent = result

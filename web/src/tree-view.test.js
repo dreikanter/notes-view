@@ -48,4 +48,17 @@ describe('TreeView construction', () => {
     expect(loader).toHaveBeenCalledWith('sub')
     expect(container.querySelector('[data-path="sub/x.md"]')).toBeTruthy()
   })
+
+  it('honors classPrefix option', async () => {
+    const tv = new TreeView(container, {
+      loader: makeLoader(twoRoot),
+      classPrefix: 'x-',
+    })
+    await tv.ready
+    expect(container.querySelector('.x-root')).toBeTruthy()
+    expect(container.querySelector('.tv-root')).toBeNull()
+    const item = container.querySelector('[role="treeitem"]')
+    expect(item.classList.contains('x-item')).toBe(true)
+    expect(item.classList.contains('x-item--dir')).toBe(true)
+  })
 })
