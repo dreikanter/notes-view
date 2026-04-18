@@ -319,6 +319,7 @@ func (s *Server) handleDir(w http.ResponseWriter, r *http.Request) {
 			s.logger.Warn("dir listing build failed", "dir", dirPath, "err", err)
 			card = &IndexCard{Empty: "Failed to read directory."}
 		}
+		card.Flat = true
 		title := dirPath
 		if title == "" {
 			title = "/"
@@ -350,6 +351,7 @@ func (s *Server) handleDir(w http.ResponseWriter, r *http.Request) {
 		s.logger.Warn("dir listing build failed", "dir", dirPath, "err", err)
 		card = &IndexCard{Empty: "Failed to read directory."}
 	}
+	card.Flat = true
 	tree, err := buildDirTree(s.root, dirPath)
 	if err != nil {
 		s.logger.Warn("sidebar tree build failed", "dir", dirPath, "err", err)

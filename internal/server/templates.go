@@ -22,6 +22,9 @@ type IndexEntry struct {
 type IndexCard struct {
 	Entries []IndexEntry
 	Empty   string
+	// Flat suppresses the directory chevron toggle when rendering this
+	// card — set on main-pane listings where the chevron has no meaning.
+	Flat bool
 }
 
 // layoutFields is the common chrome passed to every full-page render.
