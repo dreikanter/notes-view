@@ -76,6 +76,14 @@ export function mountSidebar() {
   window.addEventListener('popstate', async () => {
     const path = pathFromURL(location.pathname)
     if (!path) return
+    // Reload content in the main pane to match the new URL.
+    htmx.ajax('GET', location.pathname, {
+      target: '#note-pane',
+      swap: 'innerHTML',
+      headers: { 'HX-Target': 'note-pane' },
+    })
+    // Sync the tree to the new selection without emitting tree:select
+    // (which would trigger another htmx call and a duplicate pushState).
     for (const a of ancestorsOf(path)) {
       try { await tree.expand(a) } catch {}
     }

@@ -132,4 +132,18 @@ test.describe('Sidebar Tree (client-side TreeView)', () => {
     await page.locator('#files-section > button').click()
     await expect(page.locator('#files-content')).toBeVisible()
   })
+
+  test('browser back navigates back and restores note pane content', async ({ page }) => {
+    await page.goto('/view/README.md')
+    await page.click('#sidebar-toggle')
+    await page.locator('#sidebar-tree [data-path="journal"] .tv-toggle').click()
+    await page.locator('#sidebar-tree [data-path="journal/day-one.md"] .tv-label').click()
+    await expect(page).toHaveURL(/\/view\/journal\/day-one\.md/)
+    await expect(page.locator('#note-card')).toContainText('Day One')
+
+    await page.goBack()
+    await expect(page).toHaveURL(/\/view\/README\.md/)
+    // Main pane should reload to show README content
+    await expect(page.locator('#note-card')).toContainText('Welcome')
+  })
 })
