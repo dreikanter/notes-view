@@ -126,6 +126,31 @@ test.describe('Sidebar Tree Navigation', () => {
     await expect(page).toHaveURL(/\/view\/README\.md/);
   });
 
+  test('selecting a note from main pane keeps other expanded dirs open', async ({ page }) => {
+    await page.goto('/view/README.md');
+    await page.click('#sidebar-toggle');
+
+    const filesContent = page.locator('#files-content');
+
+    // Expand both journal and projects via chevrons — two independent branches
+    await filesContent.locator('button[data-entry-href="/dir/journal"]').click();
+    await filesContent.locator('button[data-entry-href="/dir/projects"]').click();
+    await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toBeVisible();
+    await expect(filesContent.locator('a', { hasText: 'alpha.md' })).toBeVisible();
+
+    // Navigate to a note via the main-pane route: show the dir listing for
+    // journal, then click day-two.md from there (external origin).
+    await filesContent.locator('a', { hasText: 'journal' }).click();
+    const listing = page.locator('#dir-listing');
+    await listing.locator('a', { hasText: 'day-two.md' }).click();
+    await page.locator('#note-card').waitFor();
+
+    // journal is still expanded (we just picked a note inside it) AND the
+    // unrelated "projects" branch must still be expanded too.
+    await expect(filesContent.locator('a', { hasText: 'day-one.md' })).toBeVisible();
+    await expect(filesContent.locator('a', { hasText: 'alpha.md' })).toBeVisible();
+  });
+
   test('clicking a note opens it in main panel', async ({ page }) => {
     await page.goto('/view/README.md');
     await page.click('#sidebar-toggle');
