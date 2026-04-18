@@ -109,11 +109,6 @@ func TestRenderView(t *testing.T) {
 		SSEWatch: "/events?watch=notes%2Ftest.md",
 		ViewHref: "/view/notes/test.md",
 		Sidebar: SidebarPartialData{
-			Files: &IndexCard{
-				Entries: []IndexEntry{
-					{Name: "test.md", IsDir: false, Href: "/view/notes/test.md"},
-				},
-			},
 			Tags: &IndexCard{
 				Entries: nil,
 				Empty:   "No tags found.",
@@ -230,12 +225,6 @@ func TestRenderSidebarPartial(t *testing.T) {
 	}
 
 	data := SidebarPartialData{
-		Files: &IndexCard{
-			Entries: []IndexEntry{
-				{Name: "readme.md", IsDir: false, Href: "/view/docs/readme.md"},
-				{Name: "subdir", IsDir: true, Href: "/view/docs/subdir/"},
-			},
-		},
 		Tags: &IndexCard{
 			Empty: "No tags found.",
 		},
@@ -265,7 +254,7 @@ func TestRenderSidebarPartial_NilIndexCard(t *testing.T) {
 		t.Fatalf("loadTemplates() error: %v", err)
 	}
 
-	data := SidebarPartialData{Files: nil, Tags: nil}
+	data := SidebarPartialData{Tags: nil}
 
 	var buf bytes.Buffer
 	if err := ts.renderSidebarPartial(&buf, data); err != nil {
@@ -279,13 +268,6 @@ func TestRenderSidebarPartial_Tree(t *testing.T) {
 		t.Fatalf("loadTemplates() error: %v", err)
 	}
 	data := SidebarPartialData{
-		Files: &IndexCard{
-			Entries: []IndexEntry{
-				{Name: "notes", IsDir: true, Href: "/dir/notes"},
-				{Name: "README.md", IsDir: false, Href: "/view/README.md"},
-			},
-			Empty: "No files here.",
-		},
 		Tags: &IndexCard{
 			Entries: []IndexEntry{
 				{Name: "golang", IsTag: true, Href: "/tags/golang"},

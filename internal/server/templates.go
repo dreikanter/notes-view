@@ -10,21 +10,16 @@ import (
 )
 
 type IndexEntry struct {
-	Name     string
-	IsDir    bool
-	IsTag    bool
-	Expanded bool
-	Depth    int
-	Href     string
+	Name  string
+	IsDir bool
+	IsTag bool
+	Href  string
 }
 
 // IndexCard is the sidebar's data shape.
 type IndexCard struct {
 	Entries []IndexEntry
 	Empty   string
-	// Flat suppresses the directory chevron toggle when rendering this
-	// card — set on main-pane listings where the chevron has no meaning.
-	Flat bool
 }
 
 // layoutFields is the common chrome passed to every full-page render.
@@ -63,7 +58,6 @@ type NotePartialData struct {
 
 // SidebarPartialData is the render context for the sidebar tree.
 type SidebarPartialData struct {
-	Files       *IndexCard  // FILES section entries (rendered empty for now)
 	Tags        *IndexCard  // TAGS section entries
 	InitialJSON template.JS // {"selectedPath": "<path>" | null} — consumed by TreeView
 }
@@ -134,14 +128,6 @@ func (t *templateSet) renderNotePartial(w io.Writer, data NotePartialData) error
 
 func (t *templateSet) renderSidebarPartial(w io.Writer, data SidebarPartialData) error {
 	return t.sidebar.ExecuteTemplate(w, "sidebar_body", data)
-}
-
-func (t *templateSet) renderEntryList(w io.Writer, data *IndexCard) error {
-	return t.sidebar.ExecuteTemplate(w, "entry_list", data)
-}
-
-func (t *templateSet) renderEntryListRows(w io.Writer, data *IndexCard) error {
-	return t.sidebar.ExecuteTemplate(w, "entry_list_rows", data)
 }
 
 func (t *templateSet) renderDirListing(w io.Writer, data DirListingData) error {

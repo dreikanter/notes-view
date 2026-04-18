@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/dreikanter/notes-view/internal/index"
@@ -81,11 +80,6 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 	// Empty state: render the two-pane layout with no note.
 	lf := s.buildLayoutFields("", "")
-	tree, err := buildDirTree(s.root, "")
-	if err != nil {
-		s.logger.Warn("sidebar tree build failed", "dir", "", "err", err)
-	}
-	filesCard := &IndexCard{Entries: tree, Empty: "No files here."}
 	tagsCard := s.buildTagsIndex()
 	s.index.Rebuild()
 
@@ -95,7 +89,6 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 		HTML:         template.HTML(`<p class="text-gray-500 text-center py-8">No note selected.</p>`),
 		ViewHref:     "/",
 		Sidebar: SidebarPartialData{
-			Files:       filesCard,
 			Tags:        tagsCard,
 			InitialJSON: buildInitialJSON(""),
 		},
@@ -175,15 +168,8 @@ func (s *Server) handleView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Full page: build sidebar tree with both sections.
-	sidebarDir := currentDir
+	// Full page: build sidebar with tags section.
 	lf := s.buildLayoutFields(title, editPath)
-
-	tree, err := buildDirTree(s.root, sidebarDir)
-	if err != nil {
-		s.logger.Warn("sidebar tree build failed", "dir", sidebarDir, "err", err)
-	}
-	filesCard := &IndexCard{Entries: tree, Empty: "No files here."}
 	tagsCard := s.buildTagsIndex()
 
 	view := ViewData{
@@ -195,7 +181,6 @@ func (s *Server) handleView(w http.ResponseWriter, r *http.Request) {
 		SSEWatch:     viewSSEWatch(reqPath),
 		ViewHref:     "/view/" + viewPath(reqPath),
 		Sidebar: SidebarPartialData{
-			Files:       filesCard,
 			Tags:        tagsCard,
 			InitialJSON: buildInitialJSON(reqPath),
 		},
@@ -337,55 +322,11 @@ func (s *Server) handleDir(w http.ResponseWriter, r *http.Request) {
 			s.logger.Warn("dir listing build failed", "dir", dirPath, "err", err)
 			card = &IndexCard{Empty: "Failed to read directory."}
 		}
-		card.Flat = true
 		title := dirPath
 		if title == "" {
 			title = "/"
 		}
 		if err := s.templates.renderDirListing(w, DirListingData{Title: title, IndexCard: card}); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		return
-	}
-
-	// Children-only partial: flat <li> rows for this dir's immediate
-	// children, tagged at the requested depth. Used by the sidebar
-	// chevron to expand a dir in place without re-rendering the whole
-	// tree (so the clicked row stays under the cursor).
-	if r.URL.Query().Get("children") == "1" {
-		depth, err := strconv.Atoi(r.URL.Query().Get("depth"))
-		if err != nil || depth < 0 {
-			http.Error(w, "invalid depth", http.StatusBadRequest)
-			return
-		}
-		absPath, err := SafePath(s.root, dirPath)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		entries, err := readDirEntries(absPath, dirPath)
-		if err != nil {
-			s.logger.Warn("children listing build failed", "dir", dirPath, "err", err)
-			entries = nil
-		}
-		for i := range entries {
-			entries[i].Depth = depth
-		}
-		if err := s.templates.renderEntryListRows(w, &IndexCard{Entries: entries}); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		return
-	}
-
-	// Sidebar partial: tree with ancestor chain.
-	if r.Header.Get("HX-Request") == "true" {
-		tree, err := buildDirTree(s.root, dirPath)
-		if err != nil {
-			s.logger.Warn("sidebar tree build failed", "dir", dirPath, "err", err)
-			tree = nil
-		}
-		card := &IndexCard{Entries: tree, Empty: "No files here."}
-		if err := s.templates.renderEntryList(w, card); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
@@ -398,16 +339,10 @@ func (s *Server) handleDir(w http.ResponseWriter, r *http.Request) {
 		s.logger.Warn("dir listing build failed", "dir", dirPath, "err", err)
 		card = &IndexCard{Empty: "Failed to read directory."}
 	}
-	card.Flat = true
-	tree, err := buildDirTree(s.root, dirPath)
-	if err != nil {
-		s.logger.Warn("sidebar tree build failed", "dir", dirPath, "err", err)
-	}
 	title := dirPath
 	if title == "" {
 		title = "/"
 	}
-	filesCard := &IndexCard{Entries: tree, Empty: "No files here."}
 	tagsCard := s.buildTagsIndex()
 
 	view := ViewData{
@@ -415,7 +350,6 @@ func (s *Server) handleDir(w http.ResponseWriter, r *http.Request) {
 		HTML:         template.HTML(""),
 		ViewHref:     "/dir/" + viewPath(dirPath),
 		Sidebar: SidebarPartialData{
-			Files:       filesCard,
 			Tags:        tagsCard,
 			InitialJSON: buildInitialJSON(dirPath),
 		},
@@ -435,22 +369,11 @@ func (s *Server) handleTags(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if r.Header.Get("HX-Request") == "true" {
-		if err := s.templates.renderEntryList(w, card); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		return
-	}
 	// Full-page load
-	filesCard, _ := s.buildDirIndex("")
-	if filesCard == nil {
-		filesCard = &IndexCard{Empty: "No files here."}
-	}
 	view := ViewData{
 		layoutFields: s.buildLayoutFields("Tags", ""),
 		ViewHref:     "/tags",
 		Sidebar: SidebarPartialData{
-			Files:       filesCard,
 			Tags:        card,
 			InitialJSON: buildInitialJSON(""),
 		},
@@ -487,16 +410,11 @@ func (s *Server) handleTagNotes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Full-page load (direct URL visit / reload).
-	filesCard, _ := s.buildDirIndex("")
-	if filesCard == nil {
-		filesCard = &IndexCard{Empty: "No files here."}
-	}
 	tagsCard := s.buildTagsIndex()
 	view := ViewData{
 		layoutFields: s.buildLayoutFields(tag, ""),
 		ViewHref:     "/tags/" + tagPath(tag),
 		Sidebar: SidebarPartialData{
-			Files:       filesCard,
 			Tags:        tagsCard,
 			InitialJSON: buildInitialJSON(""),
 		},
