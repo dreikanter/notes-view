@@ -146,25 +146,64 @@ window.selectDir = function(href, skipPush, fromSidebar) {
   setLS('filesOpen', '1');
 };
 
-// Chevron click: toggle a directory's expanded state in the sidebar only.
-// Does not touch the URL or the main pane — this is pure tree manipulation,
-// independent from the label-click navigation handled by selectDir.
+// Chevron click: toggle a directory's expanded state by manipulating only
+// the rows under the clicked <li>. Avoids re-rendering the whole tree,
+// which would reshuffle siblings and jerk the clicked row away from the
+// cursor. Does not touch the URL, the main pane, or filesDir.
 window.toggleDir = function(href, isExpanded) {
-  var dirPath = decodeURIComponent(href.replace(/^\/dir\//, ''));
-  var targetPath;
+  var button = document.querySelector('button[data-action="toggleDir"][data-entry-href="' + href + '"]');
+  if (!button) return;
+  var li = button.closest('li');
+  if (!li) return;
+  var depth = parseInt(li.getAttribute('data-depth') || '0', 10);
+
   if (isExpanded) {
-    var slash = dirPath.lastIndexOf('/');
-    targetPath = slash < 0 ? '' : dirPath.substring(0, slash);
-  } else {
-    targetPath = dirPath;
+    removeDescendantRows(li, depth);
+    setChevronState(button, false);
+    return;
   }
-  setLS('filesDir', targetPath);
-  var targetHref = '/dir/' + encodePath(targetPath);
-  htmx.ajax('GET', targetHref, {
-    target: '#files-content',
-    swap: 'innerHTML',
-  });
+
+  var dirPath = decodeURIComponent(href.replace(/^\/dir\//, ''));
+  var fetchUrl = '/dir/' + encodePath(dirPath) + '?children=1&depth=' + (depth + 1);
+  fetch(fetchUrl, { headers: { 'HX-Request': 'true' } })
+    .then(function(res) { return res.ok ? res.text() : ''; })
+    .then(function(html) {
+      if (!html) return;
+      insertRowsAfter(li, html);
+      setChevronState(button, true);
+      // Highlight the currently-selected entry in case it just appeared.
+      var selected = getLS('selected', '');
+      if (selected) markSelected('[data-entry-href="' + selected + '"]');
+    });
 };
+
+function removeDescendantRows(li, depth) {
+  var sibling = li.nextElementSibling;
+  while (sibling) {
+    var d = parseInt(sibling.getAttribute('data-depth') || '0', 10);
+    if (d <= depth) break;
+    var next = sibling.nextElementSibling;
+    sibling.remove();
+    sibling = next;
+  }
+}
+
+function insertRowsAfter(li, html) {
+  var tmpl = document.createElement('template');
+  tmpl.innerHTML = html.trim();
+  var newRows = Array.from(tmpl.content.children);
+  for (var i = newRows.length - 1; i >= 0; i--) {
+    li.insertAdjacentElement('afterend', newRows[i]);
+  }
+}
+
+function setChevronState(button, expanded) {
+  button.textContent = expanded ? '\u25BE' : '\u25B8';
+  button.setAttribute('data-expanded', expanded ? '1' : '0');
+  var name = button.getAttribute('aria-label') || '';
+  name = name.replace(/^(Collapse|Expand)\s+/, '');
+  button.setAttribute('aria-label', (expanded ? 'Collapse ' : 'Expand ') + name);
+}
 
 // --- Tag navigation ---
 

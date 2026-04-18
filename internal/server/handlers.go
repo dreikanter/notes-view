@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/dreikanter/notes-view/internal/index"
@@ -325,6 +326,31 @@ func (s *Server) handleDir(w http.ResponseWriter, r *http.Request) {
 			title = "/"
 		}
 		if err := s.templates.renderDirListing(w, DirListingData{Title: title, IndexCard: card}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Children-only partial: flat <li> rows for this dir's immediate
+	// children, tagged at the requested depth. Used by the sidebar
+	// chevron to expand a dir in place without re-rendering the whole
+	// tree (so the clicked row stays under the cursor).
+	if r.URL.Query().Get("children") == "1" {
+		depth, _ := strconv.Atoi(r.URL.Query().Get("depth"))
+		absPath, err := SafePath(s.root, dirPath)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		entries, err := readDirEntries(absPath, dirPath)
+		if err != nil {
+			s.logger.Warn("children listing build failed", "dir", dirPath, "err", err)
+			entries = nil
+		}
+		for i := range entries {
+			entries[i].Depth = depth
+		}
+		if err := s.templates.renderEntryListRows(w, &IndexCard{Entries: entries}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return

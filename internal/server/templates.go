@@ -139,6 +139,10 @@ func (t *templateSet) renderEntryList(w io.Writer, data *IndexCard) error {
 	return t.sidebar.ExecuteTemplate(w, "entry_list", data)
 }
 
+func (t *templateSet) renderEntryListRows(w io.Writer, data *IndexCard) error {
+	return t.sidebar.ExecuteTemplate(w, "entry_list_rows", data)
+}
+
 func (t *templateSet) renderDirListing(w io.Writer, data DirListingData) error {
 	return t.dirListing.ExecuteTemplate(w, "dir_listing", data)
 }
