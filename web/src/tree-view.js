@@ -130,7 +130,8 @@ export class TreeView {
     li.setAttribute('aria-level', String(level))
     li.setAttribute('aria-selected', 'false')
     li.setAttribute('tabindex', '-1')
-    li.style.setProperty('--tv-depth', String(level - 1))
+    const depth = node.isDir ? level - 1 : Math.max(0, level - 2)
+    li.style.setProperty('--tv-depth', String(depth))
     if (node.isDir) li.setAttribute('aria-expanded', 'false')
 
     const row = document.createElement('div')
