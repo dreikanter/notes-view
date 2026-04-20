@@ -29,6 +29,9 @@ function escapeSelector(s) {
   return String(s).replace(/["\\[\]]/g, '\\$&')
 }
 
+const SQUARE_PLUS_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>'
+const SQUARE_MINUS_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/></svg>'
+
 export class TreeView {
   constructor(container, options) {
     if (!container) throw new Error('TreeView: container is required')
@@ -127,22 +130,26 @@ export class TreeView {
     li.setAttribute('aria-level', String(level))
     li.setAttribute('aria-selected', 'false')
     li.setAttribute('tabindex', '-1')
-    li.style.setProperty('--tv-depth', String(level - 1))
+    const depth = node.isDir ? level - 1 : Math.max(0, level - 2)
+    li.style.setProperty('--tv-depth', String(depth))
     if (node.isDir) li.setAttribute('aria-expanded', 'false')
 
     const row = document.createElement('div')
-    row.className = `${this._cls('row')} flex items-center gap-2 px-4 py-2 text-sm`
+    row.className = `${this._cls('row')} flex items-center gap-2 pr-4 py-2 text-sm`
+    row.style.paddingLeft = `calc(1rem + var(--tv-depth) * 1rem)`
     if (node.isDir) {
       const btn = document.createElement('button')
       btn.type = 'button'
-      btn.className = `${this._cls('toggle')} flex items-center justify-center w-8 flex-shrink-0 text-gray-400 dark:text-gray-500 cursor-pointer bg-transparent border-0 p-0`
+      btn.className = `${this._cls('toggle')} flex items-center justify-center w-4 flex-shrink-0 text-gray-400 dark:text-gray-500 cursor-pointer bg-transparent border-0 p-0`
       btn.setAttribute('tabindex', '-1')
       btn.setAttribute('aria-hidden', 'true')
-      btn.textContent = '\u25B8'
+      btn.setAttribute('data-expanded', 'false')
+      btn.innerHTML = SQUARE_PLUS_SVG
       row.appendChild(btn)
     } else {
       const spacer = document.createElement('span')
-      spacer.className = `${this._cls('toggle-spacer')} w-8 flex-shrink-0`
+      spacer.className = `${this._cls('toggle-spacer')} w-4 flex-shrink-0`
+      spacer.setAttribute('aria-hidden', 'true')
       row.appendChild(spacer)
     }
 
@@ -155,13 +162,16 @@ export class TreeView {
     }
 
     const icon = document.createElement('span')
-    icon.className = `${this._cls('icon')} flex-shrink-0`
+    icon.className = `${this._cls('icon')} flex-shrink-0 inline-flex items-center`
+    icon.setAttribute('aria-hidden', 'true')
     if (typeof this.renderIcon === 'function') {
       const result = this.renderIcon(node)
       if (typeof result === 'string') icon.textContent = result
       else if (result instanceof Node) icon.appendChild(result)
     } else {
-      icon.textContent = node.isDir ? '\uD83D\uDCC1' : '\uD83D\uDCC4'
+      icon.innerHTML = node.isDir
+        ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>'
+        : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>'
     }
     link.appendChild(icon)
 
@@ -179,7 +189,6 @@ export class TreeView {
     row.appendChild(link)
 
     li.appendChild(row)
-    li.style.paddingLeft = `calc(var(--tv-depth) * 1rem)`
     return li
   }
 
@@ -352,7 +361,8 @@ export class TreeView {
     const toggleCls = this._cls('toggle')
     for (const child of row.children) {
       if (child.classList && child.classList.contains(toggleCls)) {
-        child.textContent = expanded ? '\u25BE' : '\u25B8'
+        child.setAttribute('data-expanded', expanded ? 'true' : 'false')
+        child.innerHTML = expanded ? SQUARE_MINUS_SVG : SQUARE_PLUS_SVG
         return
       }
     }

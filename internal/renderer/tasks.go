@@ -2,29 +2,53 @@ package renderer
 
 import (
 	"regexp"
-	"strings"
+
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	east "github.com/yuin/goldmark/extension/ast"
+	"github.com/yuin/goldmark/renderer"
+	"github.com/yuin/goldmark/util"
 )
 
-// GFM converts [ ] and [x] to checkbox inputs; we replace those rendered forms.
-// [+] is not a GFM task marker so it passes through as literal text.
-var taskPatterns = []struct {
-	marker  string
-	replace string
-}{
-	// GFM unchecked checkbox → task-unchecked span
-	{`<input disabled="" type="checkbox"> `, `<span class="task-unchecked"></span> `},
-	// GFM checked checkbox → task-checked span (fallback, in case [x] is used)
-	{`<input checked="" disabled="" type="checkbox"> `, `<span class="task-checked">&#10003;</span> `},
-	// [+] passes through goldmark as literal text
-	{"[+] ", `<span class="task-checked">&#10003;</span> `},
+const (
+	svgTaskUnchecked = `<svg class="task-unchecked" role="img" aria-label="task incomplete" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>`
+	svgTaskChecked   = `<svg class="task-checked" role="img" aria-label="task complete" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>`
+)
+
+// TaskCheckBoxExtension replaces goldmark's default <input type="checkbox">
+// output for GFM task items with inline Lucide SVG icons.
+var TaskCheckBoxExtension goldmark.Extender = &taskCheckBoxExtension{}
+
+type taskCheckBoxExtension struct{}
+
+func (e *taskCheckBoxExtension) Extend(m goldmark.Markdown) {
+	m.Renderer().AddOptions(
+		renderer.WithNodeRenderers(
+			util.Prioritized(&taskCheckBoxRenderer{}, 100),
+		),
+	)
+}
+
+type taskCheckBoxRenderer struct{}
+
+func (r *taskCheckBoxRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
+	reg.Register(east.KindTaskCheckBox, r.renderTaskCheckBox)
+}
+
+func (r *taskCheckBoxRenderer) renderTaskCheckBox(w util.BufWriter, _ []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	if !entering {
+		return ast.WalkContinue, nil
+	}
+	if node.(*east.TaskCheckBox).IsChecked {
+		_, _ = w.WriteString(svgTaskChecked)
+	} else {
+		_, _ = w.WriteString(svgTaskUnchecked)
+	}
+	return ast.WalkContinue, nil
 }
 
 var dailyPattern = regexp.MustCompile(`\[daily\]\s*`)
 
 func processTaskSyntax(html string) string {
-	for _, p := range taskPatterns {
-		html = strings.ReplaceAll(html, p.marker, p.replace)
-	}
-	html = dailyPattern.ReplaceAllString(html, `<span class="task-tag">daily</span> `)
-	return html
+	return dailyPattern.ReplaceAllString(html, `<span class="task-tag">daily</span> `)
 }
