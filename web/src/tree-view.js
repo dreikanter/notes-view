@@ -140,10 +140,6 @@ export class TreeView {
       btn.setAttribute('aria-hidden', 'true')
       btn.textContent = '\u25B8'
       row.appendChild(btn)
-    } else {
-      const spacer = document.createElement('span')
-      spacer.className = `${this._cls('toggle-spacer')} w-4 flex-shrink-0`
-      row.appendChild(spacer)
     }
 
     const href = typeof this.rowHref === 'function' ? this.rowHref(node) : null
