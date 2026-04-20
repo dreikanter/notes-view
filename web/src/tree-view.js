@@ -29,6 +29,9 @@ function escapeSelector(s) {
   return String(s).replace(/["\\[\]]/g, '\\$&')
 }
 
+const SQUARE_PLUS_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>'
+const SQUARE_MINUS_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/></svg>'
+
 export class TreeView {
   constructor(container, options) {
     if (!container) throw new Error('TreeView: container is required')
@@ -138,7 +141,8 @@ export class TreeView {
       btn.className = `${this._cls('toggle')} flex items-center justify-center w-4 flex-shrink-0 text-gray-400 dark:text-gray-500 cursor-pointer bg-transparent border-0 p-0`
       btn.setAttribute('tabindex', '-1')
       btn.setAttribute('aria-hidden', 'true')
-      btn.textContent = '\u25B8'
+      btn.setAttribute('data-expanded', 'false')
+      btn.innerHTML = SQUARE_PLUS_SVG
       row.appendChild(btn)
     }
 
@@ -350,7 +354,8 @@ export class TreeView {
     const toggleCls = this._cls('toggle')
     for (const child of row.children) {
       if (child.classList && child.classList.contains(toggleCls)) {
-        child.textContent = expanded ? '\u25BE' : '\u25B8'
+        child.setAttribute('data-expanded', expanded ? 'true' : 'false')
+        child.innerHTML = expanded ? SQUARE_MINUS_SVG : SQUARE_PLUS_SVG
         return
       }
     }
