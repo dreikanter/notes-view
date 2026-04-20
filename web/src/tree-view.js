@@ -135,7 +135,8 @@ export class TreeView {
     if (node.isDir) li.setAttribute('aria-expanded', 'false')
 
     const row = document.createElement('div')
-    row.className = `${this._cls('row')} flex items-center gap-2 px-4 py-2 text-sm`
+    row.className = `${this._cls('row')} flex items-center gap-2 pr-4 py-2 text-sm`
+    row.style.paddingLeft = `calc(1rem + var(--tv-depth) * 1rem)`
     if (node.isDir) {
       const btn = document.createElement('button')
       btn.type = 'button'
@@ -187,7 +188,6 @@ export class TreeView {
     row.appendChild(link)
 
     li.appendChild(row)
-    li.style.paddingLeft = `calc(var(--tv-depth) * 1rem)`
     return li
   }
 
