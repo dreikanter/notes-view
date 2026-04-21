@@ -10,17 +10,12 @@ import (
 	"github.com/dreikanter/notes-view/web"
 )
 
-var faviconDataURI = loadFaviconDataURI()
+var faviconDataURI = mustFaviconDataURI()
 
-// blankFaviconDataURI is an empty SVG used when web/static/favicon.svg
-// is missing; it renders as nothing but still satisfies the browser's
-// favicon request so it doesn't fall back to /favicon.ico.
-const blankFaviconDataURI template.URL = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4="
-
-func loadFaviconDataURI() template.URL {
+func mustFaviconDataURI() template.URL {
 	data, err := web.StaticFS.ReadFile("static/favicon.svg")
 	if err != nil {
-		return blankFaviconDataURI
+		panic(fmt.Errorf("read favicon.svg: %w", err))
 	}
 	return template.URL("data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString(data))
 }
