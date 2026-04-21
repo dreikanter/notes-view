@@ -124,7 +124,7 @@ export class TreeView {
 
   _buildItem(node, level) {
     const li = document.createElement('li')
-    li.className = `${this._cls('item')} ${node.isDir ? this._cls('item--dir') : this._cls('item--file')} border-b border-gray-100 dark:border-gray-800 last:border-b-0`
+    li.className = `${this._cls('item')} ${node.isDir ? this._cls('item--dir') : this._cls('item--file')}`
     li.setAttribute('role', 'treeitem')
     li.setAttribute('data-path', node.path)
     li.setAttribute('aria-level', String(level))
@@ -135,7 +135,7 @@ export class TreeView {
     if (node.isDir) li.setAttribute('aria-expanded', 'false')
 
     const row = document.createElement('div')
-    row.className = `${this._cls('row')} flex items-center gap-2 pr-4 py-2 text-sm`
+    row.className = `${this._cls('row')} flex items-center gap-2 pr-4 py-2 text-sm transition-colors duration-100 border border-transparent border-b-gray-100 dark:border-b-gray-800 hover:border-blue-300 dark:hover:border-blue-600`
     row.style.paddingLeft = `calc(1rem + var(--tv-depth) * 1rem)`
     if (node.isDir) {
       const btn = document.createElement('button')
