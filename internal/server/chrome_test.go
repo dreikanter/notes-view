@@ -32,7 +32,7 @@ func TestReadDirEntries(t *testing.T) {
 	}
 
 	t.Run("filters and sorts correctly", func(t *testing.T) {
-		entries, err := readDirEntries(tmp, "notes")
+		entries, err := readDirEntries(tmp, "notes", nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -58,7 +58,7 @@ func TestReadDirEntries(t *testing.T) {
 	})
 
 	t.Run("directory entries link to /dir/", func(t *testing.T) {
-		entries, err := readDirEntries(tmp, "notes")
+		entries, err := readDirEntries(tmp, "notes", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -71,7 +71,7 @@ func TestReadDirEntries(t *testing.T) {
 	})
 
 	t.Run("file entries link to /view/", func(t *testing.T) {
-		entries, err := readDirEntries(tmp, "notes")
+		entries, err := readDirEntries(tmp, "notes", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -84,7 +84,7 @@ func TestReadDirEntries(t *testing.T) {
 	})
 
 	t.Run("empty relPath", func(t *testing.T) {
-		entries, err := readDirEntries(tmp, "")
+		entries, err := readDirEntries(tmp, "", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -103,7 +103,7 @@ func TestReadDirEntries(t *testing.T) {
 	})
 
 	t.Run("nonexistent directory returns error", func(t *testing.T) {
-		_, err := readDirEntries(filepath.Join(tmp, "nonexistent"), "")
+		_, err := readDirEntries(filepath.Join(tmp, "nonexistent"), "", nil)
 		if err == nil {
 			t.Error("expected error for nonexistent directory")
 		}
@@ -111,7 +111,7 @@ func TestReadDirEntries(t *testing.T) {
 
 	t.Run("empty directory returns empty slice", func(t *testing.T) {
 		empty := t.TempDir()
-		entries, err := readDirEntries(empty, "")
+		entries, err := readDirEntries(empty, "", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -126,7 +126,7 @@ func TestReadDirEntries(t *testing.T) {
 		os.WriteFile(filepath.Join(filtered, "readme.txt"), nil, 0o644)
 		os.Mkdir(filepath.Join(filtered, ".dotdir"), 0o755)
 
-		entries, err := readDirEntries(filtered, "")
+		entries, err := readDirEntries(filtered, "", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
