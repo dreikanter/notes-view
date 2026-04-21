@@ -151,7 +151,7 @@ export class TreeView {
     if (node.isDir) li.setAttribute('aria-expanded', 'false')
 
     const row = document.createElement('div')
-    row.className = `${this._cls('row')} flex items-center gap-2 pr-4 py-2 text-sm`
+    row.className = `${this._cls('row')} flex items-center gap-2 pr-4 py-2 text-sm transition-colors duration-100 border border-transparent border-b-gray-100 dark:border-b-gray-800 hover:border-blue-300 dark:hover:border-blue-600`
     row.style.paddingLeft = `calc(1rem + var(--tv-depth) * 1rem)`
     if (node.isDir) {
       const btn = document.createElement('button')
