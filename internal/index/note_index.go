@@ -39,6 +39,7 @@ type NoteEntry struct {
 	// Frontmatter-derived.
 	Slug        string
 	Title       string
+	Type        string
 	Description string
 	Tags        []string
 	Aliases     []string
@@ -138,6 +139,7 @@ func (i *NoteIndex) Build() error {
 			Stem:        stem,
 			Slug:        deriveSlug(stem, uid, fm.Slug),
 			Title:       fm.Title,
+			Type:        fm.Type,
 			Description: fm.Description,
 			Tags:        tags,
 			Aliases:     fm.Aliases,

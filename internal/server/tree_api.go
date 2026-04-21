@@ -13,6 +13,7 @@ type treeNode struct {
 	Name  string `json:"name"`
 	Path  string `json:"path"`
 	IsDir bool   `json:"isDir"`
+	Type  string `json:"type,omitempty"`
 }
 
 func (s *Server) handleTreeList(w http.ResponseWriter, r *http.Request) {
@@ -37,7 +38,7 @@ func (s *Server) handleTreeList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries, err := readDirEntries(absPath, relPath)
+	entries, err := readDirEntries(absPath, relPath, s.index)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -49,7 +50,7 @@ func (s *Server) handleTreeList(w http.ResponseWriter, r *http.Request) {
 		if relPath != "" {
 			p = relPath + "/" + e.Name
 		}
-		nodes = append(nodes, treeNode{Name: e.Name, Path: p, IsDir: e.IsDir})
+		nodes = append(nodes, treeNode{Name: e.Name, Path: p, IsDir: e.IsDir, Type: e.Type})
 	}
 
 	w.Header().Set("Content-Type", "application/json")

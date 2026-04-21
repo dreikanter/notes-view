@@ -23,6 +23,7 @@ func isFenceLine(line string) bool {
 type frontmatter struct {
 	Title       string    `yaml:"title"`
 	Slug        string    `yaml:"slug"`
+	Type        string    `yaml:"type"`
 	Description string    `yaml:"description"`
 	Tags        []string  `yaml:"tags"`
 	Aliases     []string  `yaml:"aliases"`

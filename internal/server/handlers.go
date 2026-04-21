@@ -214,7 +214,7 @@ func (s *Server) buildDirIndex(sidebarDir string) (*IndexCard, error) {
 	if err != nil {
 		return nil, err
 	}
-	entries, err := readDirEntries(absPath, sidebarDir)
+	entries, err := readDirEntries(absPath, sidebarDir, s.index)
 	if err != nil {
 		return nil, err
 	}
@@ -392,6 +392,9 @@ func (s *Server) handleTagNotes(w http.ResponseWriter, r *http.Request) {
 		entries[i] = IndexEntry{
 			Name: notePath,
 			Href: "/view/" + viewPath(notePath),
+		}
+		if ne, ok := s.index.NoteEntryByRel(notePath); ok {
+			entries[i].Type = ne.Type
 		}
 	}
 	card := &IndexCard{

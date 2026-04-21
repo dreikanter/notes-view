@@ -26,6 +26,7 @@ var templateFuncMap = template.FuncMap{
 
 type IndexEntry struct {
 	Name  string
+	Type  string // frontmatter `type` for .md entries; empty for dirs, tags, and untyped notes
 	IsDir bool
 	IsTag bool
 	Href  string

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/dreikanter/notes-view/internal/index"
 )
 
 // viewPath percent-encodes each segment of a relative file/dir path for
@@ -25,8 +27,9 @@ func tagPath(tag string) string {
 
 // readDirEntries returns the visible entries of a notes directory as
 // IndexEntry values. Directory entries link to /dir/{path}, file entries
-// link to /view/{path}.
-func readDirEntries(absPath, relPath string) ([]IndexEntry, error) {
+// link to /view/{path}. A non-nil idx populates Type from each .md
+// file's frontmatter so the UI can render type-aware icons.
+func readDirEntries(absPath, relPath string, idx *index.NoteIndex) ([]IndexEntry, error) {
 	dirEntries, err := os.ReadDir(absPath)
 	if err != nil {
 		return nil, err
@@ -50,11 +53,17 @@ func readDirEntries(absPath, relPath string) ([]IndexEntry, error) {
 		} else {
 			href = "/view/" + viewPath(entryRel)
 		}
-		entries = append(entries, IndexEntry{
+		entry := IndexEntry{
 			Name:  name,
 			IsDir: de.IsDir(),
 			Href:  href,
-		})
+		}
+		if !de.IsDir() && idx != nil {
+			if ne, ok := idx.NoteEntryByRel(entryRel); ok {
+				entry.Type = ne.Type
+			}
+		}
+		entries = append(entries, entry)
 	}
 	sort.Slice(entries, func(i, j int) bool {
 		if entries[i].IsDir != entries[j].IsDir {
