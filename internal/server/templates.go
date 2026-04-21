@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"io"
@@ -8,6 +9,20 @@ import (
 	"github.com/dreikanter/notes-view/internal/index"
 	"github.com/dreikanter/notes-view/web"
 )
+
+var faviconDataURI = mustFaviconDataURI()
+
+func mustFaviconDataURI() template.URL {
+	data, err := web.StaticFS.ReadFile("static/favicon.svg")
+	if err != nil {
+		panic(fmt.Errorf("read favicon.svg: %w", err))
+	}
+	return template.URL("data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString(data))
+}
+
+var templateFuncMap = template.FuncMap{
+	"faviconDataURI": func() template.URL { return faviconDataURI },
+}
 
 type IndexEntry struct {
 	Name  string
@@ -103,14 +118,14 @@ func loadTemplates() (*templateSet, error) {
 func parsePage(page string) (*template.Template, error) {
 	files := append([]string{}, partials...)
 	files = append(files, page)
-	return template.ParseFS(web.TemplatesFS, files...)
+	return template.New("notesview").Funcs(templateFuncMap).ParseFS(web.TemplatesFS, files...)
 }
 
 // parsePartial loads only the files needed to render one partial
 // template, so a partial response doesn't accidentally include the
 // full layout.
 func parsePartial(name string) (*template.Template, error) {
-	return template.ParseFS(web.TemplatesFS, "templates/"+name+".html", "templates/entry_list.html", "templates/sidebar_tree.html")
+	return template.New("notesview").Funcs(templateFuncMap).ParseFS(web.TemplatesFS, "templates/"+name+".html", "templates/entry_list.html", "templates/sidebar_tree.html")
 }
 
 func (t *templateSet) renderView(w io.Writer, data ViewData) error {
