@@ -204,6 +204,61 @@ type noteLinkRenderer struct{}
 
 func (r *noteLinkRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(ast.KindLink, r.renderLink)
+	reg.Register(ast.KindAutoLink, r.renderAutoLink)
+}
+
+// urlDisplayMax is the character threshold above which an autolink's
+// visible label is trimmed with a trailing ellipsis. 60 fits on one line
+// of the 900px note pane at default prose font size.
+const urlDisplayMax = 60
+
+// shortenURL trims u to roughly max characters plus a trailing "…". When
+// possible it backs the cut up to the last "/" in the back half of the
+// budget so the visible label ends on a path-segment boundary rather than
+// mid-token. URLs are treated as byte strings — URL syntax is ASCII, and
+// the rare Unicode host shows up percent-encoded in hrefs we see.
+func shortenURL(u string, max int) string {
+	if len(u) <= max {
+		return u
+	}
+	head := u[:max]
+	if i := strings.LastIndex(head, "/"); i > max/2 {
+		head = head[:i]
+	}
+	return head + "…"
+}
+
+// renderAutoLink mirrors goldmark's default autolink renderer but trims the
+// visible label with a trailing ellipsis when the URL is long, preserving
+// the full URL in href and in a title attribute for hover/tap inspection.
+func (r *noteLinkRenderer) renderAutoLink(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	n := node.(*ast.AutoLink)
+	if !entering {
+		return ast.WalkContinue, nil
+	}
+	url := n.URL(source)
+	label := n.Label(source)
+	_, _ = w.WriteString(`<a href="`)
+	if goldmarkhtml.IsDangerousURL(url) {
+		_ = w.WriteByte('#')
+	} else {
+		if n.AutoLinkType == ast.AutoLinkEmail && !bytes.HasPrefix(bytes.ToLower(url), []byte("mailto:")) {
+			_, _ = w.WriteString("mailto:")
+		}
+		_, _ = w.Write(util.EscapeHTML(util.URLEscape(url, false)))
+	}
+	_ = w.WriteByte('"')
+	display := string(label)
+	shortened := shortenURL(display, urlDisplayMax)
+	if shortened != display {
+		_, _ = w.WriteString(` title="`)
+		_, _ = w.Write(util.EscapeHTML([]byte(display)))
+		_ = w.WriteByte('"')
+	}
+	_ = w.WriteByte('>')
+	_, _ = w.Write(util.EscapeHTML([]byte(shortened)))
+	_, _ = w.WriteString("</a>")
+	return ast.WalkContinue, nil
 }
 
 func (r *noteLinkRenderer) renderLink(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {

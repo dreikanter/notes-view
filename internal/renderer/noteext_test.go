@@ -158,6 +158,78 @@ func TestDangerousURLsSanitized(t *testing.T) {
 	if !strings.Contains(html2, `data:image/png`) {
 		t.Errorf("data:image/png URL should be preserved, got: %s", html2)
 	}
+
+	// Autolinks (`<scheme:...>`) reach a different render path than regular
+	// Link nodes, so exercise the same sanitization guarantees there.
+	autoInput := `<javascript:alert(1)> <vbscript:msgbox> <data:text/html,<script>alert(1)</script>>`
+	html3, err := r.Render([]byte(autoInput), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{`href="javascript:`, `href="vbscript:`, `href="data:text/html`} {
+		if strings.Contains(html3, bad) {
+			t.Errorf("dangerous autolink URL %q reached rendered href:\n%s", bad, html3)
+		}
+	}
+}
+
+// TestLongAutoLinkShortened verifies that GFM autolinks (bare URLs and
+// `<url>` syntax) longer than urlDisplayMax get a middle-ellipsis display
+// label, with the full URL preserved in href and surfaced via title.
+func TestLongAutoLinkShortened(t *testing.T) {
+	r := NewRenderer(nil)
+	longURL := "https://example.com/very/long/path/to/a/document/that/should/be/shortened/when/rendered.html?x=1&y=2"
+	html, err := r.Render([]byte("See <"+longURL+"> for details."), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := findAnchor(t, html, "href", longURL)
+	assertAttr(t, a, "title", longURL)
+	if strings.Contains(html, ">"+longURL+"<") {
+		t.Errorf("long URL should not appear as visible label:\n%s", html)
+	}
+	if !strings.Contains(html, "…") {
+		t.Errorf("shortened label should contain ellipsis:\n%s", html)
+	}
+}
+
+// TestShortAutoLinkUnchanged verifies that autolinks under the display
+// threshold render without a title attribute and with the full URL as
+// their visible label.
+func TestShortAutoLinkUnchanged(t *testing.T) {
+	r := NewRenderer(nil)
+	shortURL := "https://example.com/short"
+	html, err := r.Render([]byte("<"+shortURL+">"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := findAnchor(t, html, "href", shortURL)
+	assertNoAttr(t, a, "title")
+	if !strings.Contains(html, ">"+shortURL+"<") {
+		t.Errorf("short URL should render in full as label:\n%s", html)
+	}
+}
+
+func TestShortenURL(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		max  int
+		want string
+	}{
+		{"short unchanged", "https://example.com", 60, "https://example.com"},
+		{"boundary unchanged", strings.Repeat("a", 30), 30, strings.Repeat("a", 30)},
+		{"cuts on path boundary", "https://example.com/aaa/bbb/ccc/ddd/eee/fff", 30, "https://example.com/aaa/bbb" + "…"},
+		{"falls back to hard cut when slash is too early", "https://a.b/" + strings.Repeat("x", 50), 30, "https://a.b/" + strings.Repeat("x", 18) + "…"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := shortenURL(c.in, c.max)
+			if got != c.want {
+				t.Errorf("shortenURL(%q, %d) = %q; want %q", c.in, c.max, got, c.want)
+			}
+		})
+	}
 }
 
 // TestInternalLinksNoDirQuery verifies that internal links do not carry
