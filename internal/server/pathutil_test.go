@@ -32,7 +32,7 @@ func TestSafePath(t *testing.T) {
 				return
 			}
 			require.NoError(t, err, "SafePath(%q, %q)", root, tt.reqPath)
-			assert.Equal(t, tt.want, got)
+			assert.Equal(t, tt.want, got, "SafePath(%q, %q)", root, tt.reqPath)
 		})
 	}
 }

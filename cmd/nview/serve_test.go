@@ -98,8 +98,10 @@ func TestBrowserCommand(t *testing.T) {
 				return
 			}
 			require.NotNil(t, cmd)
-			assert.Truef(t, filepath.Base(cmd.Path) == tt.wantBin || cmd.Args[0] == tt.wantBin,
-				"expected binary %q, got path %q", tt.wantBin, cmd.Path)
+			assert.True(t,
+				filepath.Base(cmd.Path) == tt.wantBin || cmd.Args[0] == tt.wantBin,
+				"want binary %q, got path %q args %v", tt.wantBin, cmd.Path, cmd.Args,
+			)
 		})
 	}
 }

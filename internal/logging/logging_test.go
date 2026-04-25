@@ -23,18 +23,23 @@ func TestNewDefaults(t *testing.T) {
 
 func TestNewLevels(t *testing.T) {
 	ctx := context.Background()
-	cases := map[string]slog.Level{
-		"debug":   slog.LevelDebug,
-		"info":    slog.LevelInfo,
-		"warn":    slog.LevelWarn,
-		"warning": slog.LevelWarn,
-		"error":   slog.LevelError,
-		"DEBUG":   slog.LevelDebug,
+	cases := []struct {
+		in   string
+		want slog.Level
+	}{
+		{"debug", slog.LevelDebug},
+		{"info", slog.LevelInfo},
+		{"warn", slog.LevelWarn},
+		{"warning", slog.LevelWarn},
+		{"error", slog.LevelError},
+		{"DEBUG", slog.LevelDebug},
 	}
-	for in, want := range cases {
-		logger, _, err := New(Config{Level: in})
-		require.NoError(t, err, "New(%q)", in)
-		assert.True(t, logger.Enabled(ctx, want), "level %q: want %v enabled", in, want)
+	for _, tt := range cases {
+		t.Run(tt.in, func(t *testing.T) {
+			logger, _, err := New(Config{Level: tt.in})
+			require.NoError(t, err, "New(%q)", tt.in)
+			assert.True(t, logger.Enabled(ctx, tt.want), "level %q: want %v enabled", tt.in, tt.want)
+		})
 	}
 }
 
