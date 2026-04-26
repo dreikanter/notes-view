@@ -189,6 +189,11 @@ func (i *NoteIndex) Rebuild() <-chan struct{} {
 // runBuild executes one Build and signals done; if another Rebuild
 // request arrived during the build, it chains into the follow-up build
 // in the same goroutine lineage.
+//
+// The state-machine cleanup runs in a deferred block so that even if
+// Build panics, waiters on done are released and any queued follow-up
+// still gets scheduled — without this, an SSE timer goroutine would
+// block forever.
 func (i *NoteIndex) runBuild(done chan struct{}) {
 	defer func() {
 		i.buildMu.Lock()
