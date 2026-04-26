@@ -1,24 +1,29 @@
 {{ define "sidebar_tree" }}
 <script type="application/json" id="tv-initial">{{ .InitialJSON }}</script>
-<section id="files-section">
-  <button type="button" onclick="toggleSection('files')" aria-expanded="true" aria-controls="files-content" class="w-full flex items-center gap-1.5 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-    <span id="files-disclosure" class="text-[10px] leading-none">&#9662;</span>
-    FILES
-  </button>
-  <div id="files-content" aria-hidden="false">
-    <div id="sidebar-tree"></div>
-  </div>
-</section>
+<nav class="p-3 space-y-4" aria-label="Browse">
+  <section id="quick-links-section">
+    <h2 class="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Browse</h2>
+    <div class="grid grid-cols-3 gap-2">
+      <a href="/tags" data-action="selectIndex" data-entry-href="/tags" class="rounded-md border border-gray-200 dark:border-gray-800 px-2 py-2 text-center text-xs font-medium text-blue-600 dark:text-blue-400 no-underline hover:border-blue-300 dark:hover:border-blue-600">Tags</a>
+      <a href="/types" data-action="selectIndex" data-entry-href="/types" class="rounded-md border border-gray-200 dark:border-gray-800 px-2 py-2 text-center text-xs font-medium text-blue-600 dark:text-blue-400 no-underline hover:border-blue-300 dark:hover:border-blue-600">Types</a>
+      <a href="/dates" data-action="selectIndex" data-entry-href="/dates" class="rounded-md border border-gray-200 dark:border-gray-800 px-2 py-2 text-center text-xs font-medium text-blue-600 dark:text-blue-400 no-underline hover:border-blue-300 dark:hover:border-blue-600">Dates</a>
+    </div>
+  </section>
 
-<hr class="border-gray-200 dark:border-gray-800 m-0" />
+  <section id="recent-section">
+    <h2 class="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Recent notes</h2>
+    {{ with .RecentNotes }}{{ template "entry_list" . }}{{ end }}
+  </section>
 
-<section id="tags-section">
-  <button type="button" onclick="toggleSection('tags')" aria-expanded="true" aria-controls="tags-content" class="w-full flex items-center gap-1.5 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-    <span id="tags-disclosure" class="text-[10px] leading-none">&#9662;</span>
-    TAGS
-  </button>
-  <div id="tags-content" aria-hidden="false">
-    {{ with .Tags }}{{ template "entry_list" . }}{{ end }}
-  </div>
-</section>
+  <section id="filter-section" class="space-y-3">
+    <div>
+      <h2 class="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Tags</h2>
+      <div id="tags-content">{{ with .Tags }}{{ template "entry_list" . }}{{ end }}</div>
+    </div>
+    <div>
+      <h2 class="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Types</h2>
+      <div id="types-content">{{ with .Types }}{{ template "entry_list" . }}{{ end }}</div>
+    </div>
+  </section>
+</nav>
 {{ end }}

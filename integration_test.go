@@ -17,9 +17,11 @@ import (
 func TestIntegrationSmoke(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, "2026", "03"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "2026", "01"), 0o755)
 	os.WriteFile(filepath.Join(dir, "README.md"), []byte("# Welcome\n\nHello world.\n"), 0o644)
-	os.WriteFile(filepath.Join(dir, "2026", "03", "20260331_9201_todo.md"),
-		[]byte("---\ntitle: Daily Todo\ntags: [todo]\n---\n# Daily Todo\n\n- [x] Done task\n- [ ] Pending task\n- [daily] Routine\n\nSee [readme](../../README.md) and note://20260331_9201.\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "2026", "01", "20260101_1_readme.md"), []byte("# Welcome\n\nHello world.\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "2026", "03", "20260331_9201_todo.todo.md"),
+		[]byte("---\ntitle: Daily Todo\ntype: todo\ntags: [todo]\n---\n# Daily Todo\n\n- [x] Done task\n- [ ] Pending task\n- [daily] Routine\n\nSee [readme](../../README.md) and note://9201.\n"), 0o644)
 
 	srv, err := server.NewServer(dir, "", nil)
 	if err != nil {
@@ -28,7 +30,6 @@ func TestIntegrationSmoke(t *testing.T) {
 	ts := httptest.NewServer(srv.Routes())
 	defer ts.Close()
 
-	// Test: root redirects to README
 	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
@@ -41,8 +42,7 @@ func TestIntegrationSmoke(t *testing.T) {
 		t.Errorf("root: status = %d, want 302", rootResp.StatusCode)
 	}
 
-	// Test: view a file renders HTML
-	viewResp, err := http.Get(ts.URL + "/view/2026/03/20260331_9201_todo.md")
+	viewResp, err := http.Get(ts.URL + "/n/9201")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,10 +63,7 @@ func TestIntegrationSmoke(t *testing.T) {
 		t.Errorf("view: expected markdown-body wrapper in HTML")
 	}
 
-	// Test: /view/README.md renders a two-pane view with the sidebar
-	// placeholder. The tree itself is populated client-side from
-	// /api/tree/list, so assert the API returns the expected root entries.
-	dirResp, err := http.Get(ts.URL + "/view/README.md")
+	dirResp, err := http.Get(ts.URL + "/n/1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,19 +73,18 @@ func TestIntegrationSmoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	if dirResp.StatusCode != http.StatusOK {
-		t.Errorf("/view/README.md: status = %d, body: %s", dirResp.StatusCode, viewBody)
+		t.Errorf("/n/1: status = %d, body: %s", dirResp.StatusCode, viewBody)
 	}
 	if !strings.Contains(string(viewBody), `id="sidebar"`) {
 		t.Errorf("expected #sidebar in response")
 	}
-	if !strings.Contains(string(viewBody), `id="sidebar-tree"`) {
-		t.Errorf("expected sidebar-tree placeholder in response")
+	if !strings.Contains(string(viewBody), `id="recent-section"`) || !strings.Contains(string(viewBody), `href="/types"`) || !strings.Contains(string(viewBody), `href="/dates"`) {
+		t.Errorf("expected metadata sidebar sections in response")
 	}
-	if !strings.Contains(string(viewBody), `"selectedPath":"README.md"`) {
-		t.Errorf("expected selectedPath=README.md in initial JSON")
+	if !strings.Contains(string(viewBody), `"selectedPath":"2026/01/20260101_1_readme.md"`) {
+		t.Errorf("expected selectedPath=readme rel-path in initial JSON")
 	}
 
-	// Tree data comes from /api/tree/list.
 	listResp, err := http.Get(ts.URL + "/api/tree/list?path=")
 	if err != nil {
 		t.Fatal(err)
@@ -99,8 +95,7 @@ func TestIntegrationSmoke(t *testing.T) {
 		t.Errorf("expected 2026 dir entry in tree list, got: %s", listBody)
 	}
 
-	// Test: raw endpoint
-	rawResp, err := http.Get(ts.URL + "/api/raw/README.md")
+	rawResp, err := http.Get(ts.URL + "/api/raw/1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,8 +105,7 @@ func TestIntegrationSmoke(t *testing.T) {
 		t.Errorf("raw = %q", raw)
 	}
 
-	// Test: 404
-	notFoundResp, err := http.Get(ts.URL + "/view/nonexistent.md")
+	notFoundResp, err := http.Get(ts.URL + "/n/nonexistent")
 	if err != nil {
 		t.Fatal(err)
 	}
