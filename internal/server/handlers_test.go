@@ -11,7 +11,7 @@ import (
 )
 
 // setupTestServer creates a server rooted at a temp dir containing:
-//   - 2026/03/20260331_9201_todo.md  (slug=todo, tags=[todo,daily])
+//   - 2026/03/20260331_9201_todo.todo.md  (slug=todo, tags=[todo,daily])
 //   - 2026/01/20260101_1_readme.md   (slug=readme)
 //   - README.md at root              (plain file for tree-listing tests only)
 //
@@ -22,8 +22,8 @@ func setupTestServer(t *testing.T) (*Server, string) {
 	os.MkdirAll(filepath.Join(dir, "2026", "03"), 0o755)
 	os.MkdirAll(filepath.Join(dir, "2026", "01"), 0o755)
 	os.WriteFile(
-		filepath.Join(dir, "2026", "03", "20260331_9201_todo.md"),
-		[]byte("---\ntitle: Todo\ntags: [todo, daily]\n---\n# Todo\n- [x] Done\n- [ ] Pending\n"),
+		filepath.Join(dir, "2026", "03", "20260331_9201_todo.todo.md"),
+		[]byte("---\ntitle: Todo\ntype: todo\ndescription: Daily task list\ntags: [todo, daily]\n---\n# Todo\n- [x] Done\n- [ ] Pending\n"),
 		0o644,
 	)
 	os.WriteFile(
@@ -439,7 +439,7 @@ func TestTagNotesHandler(t *testing.T) {
 		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, "20260331_9201_todo.md") {
+	if !strings.Contains(body, "Todo") {
 		t.Errorf("expected todo note in filtered list, got: %s", body)
 	}
 }
@@ -458,11 +458,100 @@ func TestTagsHandler_NotePanePartial(t *testing.T) {
 		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, "20260331_9201_todo.md") {
+	if !strings.Contains(body, "Todo") {
 		t.Errorf("expected note in tag listing, got: %s", body)
 	}
 	if !strings.Contains(body, `id="dir-listing"`) {
 		t.Errorf("expected dir-listing container, got: %s", body)
+	}
+}
+
+func TestTypesHandler_NotePanePartial(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	handler := srv.Routes()
+
+	req := httptest.NewRequest("GET", "/types/todo", nil)
+	req.Header.Set("HX-Request", "true")
+	req.Header.Set("HX-Target", "note-pane")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "Daily task list") || !strings.Contains(body, "#9201") {
+		t.Errorf("expected typed note metadata in listing, got: %s", body)
+	}
+}
+
+func TestDatesHandlersDrillDown(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	handler := srv.Routes()
+
+	for _, path := range []string{"/dates", "/dates/2026", "/dates/2026/03", "/dates/2026/03/31"} {
+		req := httptest.NewRequest("GET", path, nil)
+		req.Header.Set("HX-Request", "true")
+		req.Header.Set("HX-Target", "note-pane")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, want 200, body: %s", path, w.Code, w.Body.String())
+		}
+		if !strings.Contains(w.Body.String(), `id="dir-listing"`) {
+			t.Fatalf("%s expected dir listing, got: %s", path, w.Body.String())
+		}
+	}
+}
+
+func TestDatesHandlerRejectsInvalidPath(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	handler := srv.Routes()
+
+	for _, path := range []string{"/dates/abc", "/dates/2026/13", "/dates/2026/03/99"} {
+		req := httptest.NewRequest("GET", path, nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("%s status = %d, want 400", path, w.Code)
+		}
+	}
+}
+
+func TestSidebarPartialRendersRecentAndFilters(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	handler := srv.Routes()
+
+	req := httptest.NewRequest("GET", "/sidebar?selected=2026/03/20260331_9201_todo.todo.md", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	for _, want := range []string{`id="recent-section"`, "Todo", "daily", "todo"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("expected sidebar partial to contain %q, got: %s", want, body)
+		}
+	}
+}
+
+func TestNoteHeaderEmailStyleMetadata(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	handler := srv.Routes()
+
+	req := httptest.NewRequest("GET", "/n/9201", nil)
+	req.Header.Set("HX-Request", "true")
+	req.Header.Set("HX-Target", "note-pane")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	body := w.Body.String()
+	for _, want := range []string{"2026-03-31", "todo", "#9201", "/todo", "Daily task list"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("expected note header to contain %q, got: %s", want, body)
+		}
 	}
 }
 
@@ -536,8 +625,8 @@ func TestTypeNotesHandler(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "20260101_10.journal.md") {
-		t.Errorf("expected journal note in listing, got: %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "Day") {
+		t.Errorf("expected journal note title in listing, got: %s", w.Body.String())
 	}
 }
 
@@ -556,8 +645,8 @@ func TestDatesHandler(t *testing.T) {
 	}
 	// Fixture has notes from 2026/01/01 and 2026/03/31.
 	body := w.Body.String()
-	if !strings.Contains(body, "20260331") {
-		t.Errorf("expected date 20260331 in response, got: %s", body)
+	if !strings.Contains(body, "2026") {
+		t.Errorf("expected year 2026 in response, got: %s", body)
 	}
 }
 
@@ -565,7 +654,7 @@ func TestDateNotesHandler(t *testing.T) {
 	srv, _ := setupTestServer(t)
 	handler := srv.Routes()
 
-	req := httptest.NewRequest("GET", "/dates/2026-03", nil)
+	req := httptest.NewRequest("GET", "/dates/2026/03", nil)
 	req.Header.Set("HX-Request", "true")
 	req.Header.Set("HX-Target", "note-pane")
 	w := httptest.NewRecorder()
@@ -574,8 +663,8 @@ func TestDateNotesHandler(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "20260331_9201_todo.md") {
-		t.Errorf("expected todo note for 2026-03, got: %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "31") {
+		t.Errorf("expected March day for 2026-03, got: %s", w.Body.String())
 	}
 }
 
@@ -592,7 +681,7 @@ func TestDateNotesHandlerNoMatch(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body: %s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "No notes") {
+	if !strings.Contains(w.Body.String(), "No dated notes") {
 		t.Errorf("expected empty state for 2025, got: %s", w.Body.String())
 	}
 }
@@ -610,7 +699,7 @@ func TestNoteHandlerEmbedsInitialSelectedPath(t *testing.T) {
 		t.Errorf("expected tv-initial script tag, got: %s", body)
 	}
 	// selectedPath is the rel-path, not the slug.
-	if !strings.Contains(body, `"selectedPath":"2026/03/20260331_9201_todo.md"`) {
+	if !strings.Contains(body, `"selectedPath":"2026/03/20260331_9201_todo.todo.md"`) {
 		t.Errorf("expected selectedPath=relPath in initial JSON, got: %s", body)
 	}
 }

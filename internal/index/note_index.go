@@ -18,6 +18,7 @@ import (
 // projection of note.Entry.Meta; filesystem paths are notesctl-internal.
 type NoteEntry struct {
 	ID          int
+	RelPath     string
 	Slug        string
 	Title       string
 	Type        string
@@ -34,14 +35,14 @@ type NoteIndex struct {
 	store  note.Store
 	logger *slog.Logger
 
-	mu      sync.RWMutex
-	byID    map[int]string      // numeric ID → forward-slash rel-path
-	byRel   map[string]NoteEntry // rel-path → entry
-	byTag   map[string][]string // tag → rel-path slice
-	bySlug  map[string][]int    // slug → ID slice (multi-valued)
-	byAlias map[string][]int    // alias → ID slice (multi-valued)
-	byType  map[string][]string // type → rel-path slice
-	byDate  map[string][]string // YYYYMMDD → rel-path slice
+	mu       sync.RWMutex
+	byID     map[int]string       // numeric ID → forward-slash rel-path
+	byRel    map[string]NoteEntry // rel-path → entry
+	byTag    map[string][]string  // tag → rel-path slice
+	bySlug   map[string][]int     // slug → ID slice (multi-valued)
+	byAlias  map[string][]int     // alias → ID slice (multi-valued)
+	byType   map[string][]string  // type → rel-path slice
+	byDate   map[string][]string  // YYYYMMDD → rel-path slice
 	allTags  []string
 	allTypes []string
 
@@ -91,6 +92,7 @@ func (i *NoteIndex) Build() error {
 		rel := entryRelPath(e)
 		ne := NoteEntry{
 			ID:          e.ID,
+			RelPath:     rel,
 			Slug:        e.Meta.Slug,
 			Title:       e.Meta.Title,
 			Type:        e.Meta.Type,
@@ -336,6 +338,30 @@ func (i *NoteIndex) NotesByType(typ string) []string {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
 	return cloneStrings(i.byType[typ])
+}
+
+// AllNotes returns every indexed note entry sorted newest first by date,
+// then by ID and title for stable output.
+func (i *NoteIndex) AllNotes() []NoteEntry {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	out := make([]NoteEntry, 0, len(i.byRel))
+	for _, e := range i.byRel {
+		e.Tags = cloneStrings(e.Tags)
+		e.Aliases = cloneStrings(e.Aliases)
+		out = append(out, e)
+	}
+	sort.Slice(out, func(a, b int) bool {
+		ad, bd := out[a].Date, out[b].Date
+		if !ad.Equal(bd) {
+			return ad.After(bd)
+		}
+		if out[a].ID != out[b].ID {
+			return out[a].ID > out[b].ID
+		}
+		return out[a].Title < out[b].Title
+	})
+	return out
 }
 
 // Dates returns a sorted list of all YYYYMMDD date keys that have notes.

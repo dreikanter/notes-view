@@ -22,14 +22,26 @@ func mustFaviconDataURI() template.URL {
 
 var templateFuncMap = template.FuncMap{
 	"faviconDataURI": func() template.URL { return faviconDataURI },
+	"formatDate": func(e index.NoteEntry) string {
+		if e.Date.IsZero() {
+			return ""
+		}
+		return e.Date.Format("2006-01-02")
+	},
 }
 
 type IndexEntry struct {
-	Name  string
-	Type  string // frontmatter `type` for .md entries; empty for dirs, tags, and untyped notes
-	IsDir bool
-	IsTag bool
-	Href  string
+	Name        string
+	Description string
+	Date        string
+	ID          int
+	Slug        string
+	Type        string // frontmatter `type` for .md entries; empty for dirs, tags, and untyped notes
+	IsDir       bool
+	IsTag       bool
+	IsType      bool
+	IsDate      bool
+	Href        string
 }
 
 // IndexCard is the sidebar's data shape.
@@ -75,8 +87,10 @@ type NotePartialData struct {
 // SidebarData is the render context for the sidebar tree, embedded in
 // every full-page ViewData.
 type SidebarData struct {
-	Tags        *IndexCard  // TAGS section entries
-	InitialJSON template.JS // {"selectedPath": "<path>" | null} — consumed by TreeView
+	RecentNotes *IndexCard
+	Tags        *IndexCard
+	Types       *IndexCard
+	InitialJSON template.JS // kept for TreeView tests/future reuse
 }
 
 // DirListingData is the render context for the dir_listing partial,
@@ -90,6 +104,7 @@ type templateSet struct {
 	view       *template.Template
 	note       *template.Template
 	dirListing *template.Template
+	sidebar    *template.Template
 }
 
 var partials = []string{
@@ -114,7 +129,11 @@ func loadTemplates() (*templateSet, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse dir-listing partial: %w", err)
 	}
-	return &templateSet{view: view, note: note, dirListing: dirListing}, nil
+	sidebar, err := template.New("nview").Funcs(templateFuncMap).ParseFS(web.TemplatesFS, "templates/sidebar_body.html", "templates/sidebar_tree.html", "templates/entry_list.html")
+	if err != nil {
+		return nil, fmt.Errorf("parse sidebar partial: %w", err)
+	}
+	return &templateSet{view: view, note: note, dirListing: dirListing, sidebar: sidebar}, nil
 }
 
 func parsePage(page string) (*template.Template, error) {
@@ -140,4 +159,8 @@ func (t *templateSet) renderNotePartial(w io.Writer, data NotePartialData) error
 
 func (t *templateSet) renderDirListing(w io.Writer, data DirListingData) error {
 	return t.dirListing.ExecuteTemplate(w, "dir_listing", data)
+}
+
+func (t *templateSet) renderSidebar(w io.Writer, data SidebarData) error {
+	return t.sidebar.ExecuteTemplate(w, "sidebar_body", data)
 }

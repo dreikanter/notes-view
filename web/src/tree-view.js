@@ -1,4 +1,5 @@
 // TreeView — reusable client-side tree view component.
+// Retained for future reuse — not currently mounted.
 //
 // Public API:
 //   const tv = new TreeView(container, { loader, rootPath, persistKey, initial, ... })

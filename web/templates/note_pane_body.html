@@ -2,35 +2,36 @@
 <article
   id="note-card"
   class="note-card mx-auto max-w-[900px] border border-gray-200 dark:border-gray-800 rounded-md bg-white dark:bg-gray-900 max-md:px-4 max-md:py-5 max-[480px]:px-3 max-[480px]:py-4"
-  data-note-path="{{ .NotePath }}">
-  {{ if .NotePath }}
-  <header class="flex items-center justify-between px-6 py-3 border-b border-gray-200 dark:border-gray-800 max-md:px-4 max-[480px]:px-3">
-    <span class="text-sm text-gray-500 dark:text-gray-400 font-medium truncate">{{ .NoteTitle }}</span>
-    {{ if .EditHref }}
-    <button
-      type="button"
-      hx-post="{{ .EditHref }}"
-      hx-swap="none"
-      aria-label="Edit note"
-      class="bg-transparent border-0 cursor-pointer p-1.5 text-gray-400 dark:text-gray-500 rounded-md leading-none flex-shrink-0 hover:bg-gray-50 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200">
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-    </button>
-    {{ end }}
-  </header>
-  {{ end }}
+  data-note-path="{{ .NotePath }}"
+  data-view-href="{{ .ViewHref }}">
   <div class="px-6 py-6 max-md:px-4 max-md:py-5 max-[480px]:px-3 max-[480px]:py-4">
-    {{ with .Note }}
-    {{ if or .Title .Description .Tags }}
-    <div class="pb-4 mb-6 border-b border-gray-200 dark:border-gray-800">
-      {{ if .Title }}<h1 class="text-[28px] font-semibold leading-tight text-gray-900 dark:text-gray-100 mt-0 mb-2">{{ .Title }}</h1>{{ end }}
-      {{ if .Description }}<p class="text-[15px] text-gray-500 dark:text-gray-400 mt-0 mb-3">{{ .Description }}</p>{{ end }}
+    {{ if .NotePath }}
+    <header class="relative pb-4 mb-6 border-b border-gray-200 dark:border-gray-800">
+      {{ if .EditHref }}
+      <button
+        type="button"
+        hx-post="{{ .EditHref }}"
+        hx-swap="none"
+        aria-label="Edit note"
+        class="absolute right-0 top-0 bg-transparent border-0 cursor-pointer p-1.5 text-gray-400 dark:text-gray-500 rounded-md leading-none hover:bg-gray-50 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+      </button>
+      {{ end }}
+      <h1 class="pr-10 text-[28px] font-semibold leading-tight text-gray-900 dark:text-gray-100 mt-0 mb-3">{{ .NoteTitle }}</h1>
+      {{ with .Note }}
+      {{ $date := formatDate . }}{{ if or $date .Type .ID .Slug }}
+      <p class="text-sm text-gray-500 dark:text-gray-400 mt-0 mb-3">
+        {{ if $date }}{{ $date }}{{ end }}{{ if .Type }}{{ if $date }} · {{ end }}{{ .Type }}{{ end }}{{ if .ID }}{{ if or $date .Type }} · {{ end }}<a href="/n/{{ .ID }}" class="uid-link" data-note-uid="{{ .ID }}">#{{ .ID }}</a>{{ end }}{{ if .Slug }}{{ if or $date .Type .ID }} · {{ end }}/{{ .Slug }}{{ end }}
+      </p>
+      {{ end }}
       {{ if .Tags }}
-      <ul class="flex flex-wrap gap-1.5 m-0 p-0 list-none">
+      <ul class="flex flex-wrap gap-1.5 m-0 p-0 list-none mb-3">
         {{ range .Tags }}<li><a href="/tags/{{ urlquery . }}" data-action="selectTag" data-entry-name="{{ . }}" class="inline-flex items-center bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 text-xs font-medium px-2 py-0.5 rounded-full leading-relaxed no-underline cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-800">{{ . }}</a></li>{{ end }}
       </ul>
       {{ end }}
-    </div>
-    {{ end }}
+      {{ if .Description }}<p class="text-[15px] text-gray-600 dark:text-gray-300 mt-0 mb-0">{{ .Description }}</p>{{ end }}
+      {{ end }}
+    </header>
     {{ end }}
     <div class="markdown-body prose dark:prose-invert max-w-none">{{ .HTML }}</div>
   </div>
