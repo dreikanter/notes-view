@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-26
+
 ### Changed
 
 - Replace the mounted tree sidebar with metadata-driven browsing: recent notes, tag/type filters, Tags/Types/Dates index pages, compact note metadata headers, and UID-based editor launch. ([#113])
@@ -13,6 +15,8 @@
 [#93]: https://github.com/dreikanter/nview/issues/93
 [#104]: https://github.com/dreikanter/nview/pull/104
 [#113]: https://github.com/dreikanter/nview/pull/113
+
+[0.2.0]: https://github.com/dreikanter/nview/releases/tag/v0.2.0
 
 ## [0.1.0] - 2026-04-12
 
