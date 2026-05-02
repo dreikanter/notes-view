@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/dreikanter/notesctl/note"
+	"github.com/dreikanter/notes/note"
 
 	"github.com/dreikanter/nview/internal/index"
 	"github.com/dreikanter/nview/internal/logging"

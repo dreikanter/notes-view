@@ -11,13 +11,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dreikanter/notesctl/note"
+	"github.com/dreikanter/notes/note"
 
 	"github.com/dreikanter/nview/internal/logging"
 )
 
 // NoteEntry is the per-note record held in the index. It is a thin
-// projection of note.Entry.Meta; filesystem paths are notesctl-internal.
+// projection of note.Entry.Meta; filesystem paths are notes-internal.
 type NoteEntry struct {
 	ID          int
 	RelPath     string
@@ -115,7 +115,7 @@ func projectEntry(e note.Entry) NoteEntry {
 }
 
 // entryRelPath reconstructs the forward-slash relative path for e using the
-// same YYYY/MM/YYYYMMDD_ID[_slug][.type].md layout that notesctl writes.
+// same YYYY/MM/YYYYMMDD_ID[_slug][.type].md layout that notes writes.
 func entryRelPath(e note.Entry) string {
 	date := e.Meta.CreatedAt.Format(note.DateFormat)
 	filename := note.Filename(date, e.ID, e.Meta.Slug, e.Meta.Type)
