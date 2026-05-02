@@ -4,9 +4,11 @@
 
 ### Changed
 
+- Adopt an Unreleased-first changelog and release-PR versioning workflow so multiple PRs can be bundled into one release ([#117]).
 - Re-point the `notes` library dependency from `github.com/dreikanter/notesctl` to `github.com/dreikanter/notes` to follow the upstream rename. No behavior change ([#116]).
 - Replace fsnotify-based watcher loop with notesctl's `Store.Watch`, switch the index to incremental `Apply` updates, and gate SSE delivery on a per-view scope (`scope=note&id=X` for single-note views, `scope=list` for index pages). Adds `POST /api/index/refresh` plus a topbar refresh button and visibilitychange-driven reconcile so missed events are recovered on tab focus. ([#110])
 
+[#117]: https://github.com/dreikanter/nview/pull/117
 [#116]: https://github.com/dreikanter/nview/pull/116
 [#110]: https://github.com/dreikanter/nview/issues/110
 
