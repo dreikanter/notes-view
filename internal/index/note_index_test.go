@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dreikanter/notesctl/note"
+	"github.com/dreikanter/notes/note"
 )
 
 // day returns a UTC midnight time for the given year, month, day — keeps
